@@ -19,7 +19,13 @@ prepare_upstream() {
   local revision="$2"
   local destination="$3"
 
-  if [[ ! -d "$destination/.git" ]]; then
+  if [[ -e "$destination" && ! -d "$destination/.git" ]]; then
+    echo "upstream destination exists but is not a git checkout: $destination" >&2
+    echo "remove or relocate it explicitly before retrying" >&2
+    exit 1
+  fi
+
+  if [[ ! -e "$destination" ]]; then
     git clone --filter=blob:none "$repository" "$destination"
   fi
 

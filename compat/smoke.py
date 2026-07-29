@@ -130,6 +130,8 @@ async def run_smoke(args: argparse.Namespace) -> dict[str, Any]:
         finally:
             await client.close(ignore_errors=False)
 
+        # VP-01 deliberately couples to the pinned QwenPaw lifecycle seam:
+        # public disconnection alone cannot prove its background task exited.
         if client.is_connected or client._lifecycle_task is not None:
             raise AssertionError("QwenPaw client lifecycle did not close")
 
