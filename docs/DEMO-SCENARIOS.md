@@ -56,3 +56,22 @@ correct notification is allocated inside MCP Python SDK 1.29.0 and is not
 exposed to QwenPaw's `call_tool` wrapper. The MVP therefore does not monkey-patch
 client internals; see
 [`0003-cancellation-owned-by-client-sdk.md`](decisions/0003-cancellation-owned-by-client-sdk.md).
+
+## 4. Durable workflow control
+
+QwenPaw submits a fixed, policy-authorized Vyane workflow, queries it by a
+caller-owned UUIDv7, requests cancellation twice to prove idempotence, and
+observes the terminal cancelled state.
+
+Success measures:
+
+- submit acceptance and outcome correlation;
+- observable state progression;
+- idempotent cancellation acknowledgement;
+- terminal workflow cancellation;
+- bounded process cleanup and absence of task text in runtime evidence.
+
+`scripts/run-vp08.sh` executes this lifecycle through a real pinned QwenPaw
+application and the stable vyane-rs baseline. This is explicit cancellation of
+a custom Vyane workflow. It does not repair request-bound MCP cancellation and
+does not claim the MCP Tasks extension.

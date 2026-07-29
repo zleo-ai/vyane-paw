@@ -34,6 +34,8 @@ or mirror either upstream runtime.
 
 ## Delivery rules
 
+- Start a context-free continuation by reading `docs/STATUS.md`, then the
+  architecture and relevant work package it links to.
 - Work starts from a scoped file in `work-packages/`.
 - A work package is complete only when its acceptance criteria and evidence are
   present.

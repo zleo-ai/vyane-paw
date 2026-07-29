@@ -46,6 +46,9 @@ The compatibility boundary now has two deliberately different lanes:
 - `scripts/run-vp06.sh` is a moving candidate canary. It resolves public
   vyane-rs `main`, freezes that individual run to the resolved commit, and
   records the actual commit in ignored runtime evidence.
+- `scripts/run-vp08.sh stable` proves the real durable workflow lifecycle
+  against the stable lock. `scripts/run-vp08.sh candidate` runs the same
+  lifecycle against the candidate checkout after its isolated probe.
 
 The candidate checkout and evidence path are isolated from the stable lane.
 Its CI job is visible but advisory: an upstream candidate failure must not
@@ -86,7 +89,8 @@ they are not part of the stable compatibility claim.
 | Stateless request handling | Deferred | protocol test |
 | `server/discover` | Explore | capability probe |
 | MRTR routing metadata | Explore | design note and prototype |
-| Tasks extension | Final-phase candidate | durable workflow prototype |
+| Custom Vyane durable workflow tools | VP-08 complete | real submit/status/cancel lifecycle through pinned QwenPaw |
+| MCP Tasks extension | Deferred until negotiated | capability probe and future bounded work package |
 
 ## Upgrade impact
 
