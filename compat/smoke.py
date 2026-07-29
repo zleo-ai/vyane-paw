@@ -34,6 +34,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--qwenpaw-client", type=Path, required=True)
     parser.add_argument("--vyane-bin", type=Path, required=True)
+    parser.add_argument(
+        "--compatibility-lane",
+        choices=("stable", "candidate"),
+        required=True,
+    )
+    parser.add_argument("--vyane-revision", required=True)
     parser.add_argument("--rmcp-version", required=True)
     parser.add_argument("--upstreams-lock", type=Path, required=True)
     parser.add_argument("--evidence", type=Path, required=True)
@@ -67,15 +73,23 @@ def result_payload(result: Any) -> dict[str, Any]:
 def revision_map(
     lock_path: Path,
     rmcp_version: str,
+    *,
+    compatibility_lane: str | None = None,
+    vyane_revision: str | None = None,
 ) -> dict[str, str]:
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
     upstreams = lock["upstreams"]
-    return {
+    if vyane_revision is None:
+        vyane_revision = upstreams["vyane_rs"]["revision"]
+    revisions = {
         "qwenpaw": upstreams["qwenpaw"]["revision"],
-        "vyane_rs": upstreams["vyane_rs"]["revision"],
+        "vyane_rs": vyane_revision,
         "rmcp": rmcp_version,
         "python_mcp": importlib.metadata.version("mcp"),
     }
+    if compatibility_lane is not None:
+        revisions["compatibility_lane"] = compatibility_lane
+    return revisions
 
 
 async def wait_for_file(path: Path, timeout: float) -> None:
@@ -199,6 +213,8 @@ async def run_smoke(args: argparse.Namespace) -> dict[str, Any]:
         "upstream_revisions": revision_map(
             args.upstreams_lock,
             args.rmcp_version,
+            compatibility_lane=args.compatibility_lane,
+            vyane_revision=args.vyane_revision,
         ),
         "result": "passed",
         "metrics": {

@@ -23,3 +23,12 @@ jobs:
         run: ./scripts/check-repository.sh
       - name: Run compatibility, demo-flow, and product-entry smoke
         run: ./scripts/run-vp03.sh
+
+  candidate:
+    runs-on: [self-hosted, vyane-paw]
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - name: Probe current vyane-rs main
+        run: ./scripts/run-vp06.sh

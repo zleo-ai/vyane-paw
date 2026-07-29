@@ -37,6 +37,24 @@ The smoke reads the resolved `rmcp` version from the pinned `vyane-rs`
 compatibility dependencies are exact fixture versions rather than production
 application constraints.
 
+## Stable and candidate lanes
+
+The compatibility boundary now has two deliberately different lanes:
+
+- `scripts/run-vp01.sh` is the required stable gate. It uses only the exact
+  revisions in `upstreams.lock.json` and produces reproducible evidence.
+- `scripts/run-vp06.sh` is a moving candidate canary. It resolves public
+  vyane-rs `main`, freezes that individual run to the resolved commit, and
+  records the actual commit in ignored runtime evidence.
+
+The candidate checkout and evidence path are isolated from the stable lane.
+Its CI job is visible but advisory: an upstream candidate failure must not
+rewrite the last proven stable claim. Promoting a candidate requires updating
+the stable lock and completing the required CI and independent review gates.
+The same canary also runs daily at 06:20 Asia/Shanghai and supports manual
+dispatch; that scheduled workflow fails visibly when current upstream `main`
+breaks the boundary.
+
 ## Validation matrix
 
 | Capability | Phase 1 expectation | Evidence |
