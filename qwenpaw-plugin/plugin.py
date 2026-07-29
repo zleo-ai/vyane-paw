@@ -256,38 +256,47 @@ async def _invoke_workflow_control(
             code="driver_unavailable",
         )
 
-    from qwenpaw.drivers.capabilities import (
-        DriverInvocation,
-        format_capability_id,
-    )
-
     if plan["mode"] == "workflow-submit":
+        caller_id = _generate_uuid7()
         arguments = {
-            "caller_id": _generate_uuid7(),
+            "caller_id": caller_id,
             "workflow_toml": _workflow_source(plan["target"], plan["task"]),
             "prompt_files": [],
             "vars": {},
         }
     else:
+        caller_id = plan["caller_id"]
         arguments = {"caller_id": plan["caller_id"]}
-    invocation = DriverInvocation(
-        capability_id=format_capability_id(
-            "mcp",
-            MCP_CLIENT_NAMESPACE,
-            "tool",
-            "invoke",
-            raw_tool,
-        ),
-        payload=arguments,
-        request_context=_driver_request_context(ctx),
-    )
-    result = await manager.invoke_capability(invocation)
-    if not result.ok:
+    try:
+        from qwenpaw.drivers.capabilities import (
+            DriverInvocation,
+            format_capability_id,
+        )
+
+        invocation = DriverInvocation(
+            capability_id=format_capability_id(
+                "mcp",
+                MCP_CLIENT_NAMESPACE,
+                "tool",
+                "invoke",
+                raw_tool,
+            ),
+            payload=arguments,
+            request_context=_driver_request_context(ctx),
+        )
+        result = await manager.invoke_capability(invocation)
+    except Exception:
+        result = None
+        payload: dict[str, Any] = {
+            "ok": False,
+            "type": "driver_exception",
+        }
+    if result is not None and not result.ok:
         payload: dict[str, Any] = {
             "ok": False,
             "type": result.error_type or "driver_failure",
         }
-    else:
+    elif result is not None:
         content = getattr(result.value, "content", None)
         parsed = (
             payload_from_text_blocks(content) if isinstance(content, list) else None
@@ -305,6 +314,7 @@ async def _invoke_workflow_control(
         mode=plan["mode"],
         policy_profile=policy_profile,
         payload=payload,
+        correlation_id=caller_id,
     )
 
 

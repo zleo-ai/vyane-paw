@@ -75,6 +75,19 @@
     "data": {
       "type": "object"
     },
+    "correlation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "caller_id"
+      ],
+      "properties": {
+        "caller_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      }
+    },
     "error": {
       "type": "object",
       "additionalProperties": false,
@@ -107,6 +120,45 @@
           "tool": {
             "const": "vyane_route"
           }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "retry_guidance": {
+            "const": "check_status_before_retry"
+          }
+        },
+        "required": [
+          "retry_guidance"
+        ]
+      },
+      "then": {
+        "required": [
+          "correlation"
+        ],
+        "properties": {
+          "tool": {
+            "const": "vyane_workflow_submit"
+          },
+          "operation_status": {
+            "const": "rejected"
+          },
+          "error": {
+            "properties": {
+              "code": {
+                "const": "outcome_unknown"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "correlation"
+          ]
         }
       }
     },

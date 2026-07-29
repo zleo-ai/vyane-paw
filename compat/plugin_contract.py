@@ -314,6 +314,35 @@ class FakeDriverManager:
         )
 
 
+class OutcomeUnknownDriverManager:
+    def __init__(self) -> None:
+        self.invocations: list[Any] = []
+
+    async def invoke_capability(self, invocation: Any) -> Any:
+        self.invocations.append(invocation)
+        return types.SimpleNamespace(
+            ok=True,
+            value=types.SimpleNamespace(
+                content=[
+                    {
+                        "text": json.dumps(
+                            {
+                                "status": "error",
+                                "error": {"code": "outcome_unknown"},
+                            },
+                        ),
+                    },
+                ],
+            ),
+            error_type="",
+        )
+
+
+class RaisingDriverManager:
+    async def invoke_capability(self, _invocation: Any) -> Any:
+        raise RuntimeError("private driver detail")
+
+
 def assert_manifest(qwenpaw_architecture: Path | None) -> int:
     manifest = json.loads((PLUGIN_DIR / "plugin.json").read_text(encoding="utf-8"))
     if manifest["id"] != "vyane-paw":
@@ -632,6 +661,35 @@ async def assert_workflow_commands(module: Any, handler: Any) -> int:
         raise AssertionError("workflow status target drifted")
     if cancel.payload != {"caller_id": caller_id}:
         raise AssertionError("workflow cancel target drifted")
+
+    uncertain_manager = OutcomeUnknownDriverManager()
+    uncertain = await handler(
+        FakeContext(uncertain_manager),
+        "workflow-submit resilient -- MUST_NOT_ENTER_ERROR",
+    )
+    uncertain_payload = response_json(uncertain)
+    assert_operation_result_schema(uncertain_payload)
+    submitted_id = uncertain_manager.invocations[0].payload["caller_id"]
+    if uncertain_payload.get("correlation") != {"caller_id": submitted_id}:
+        raise AssertionError("indeterminate submit lost its status correlation id")
+    if uncertain_payload["retry_guidance"] != "check_status_before_retry":
+        raise AssertionError("indeterminate submit did not require status")
+    if "MUST_NOT_ENTER_ERROR" in response_text(uncertain):
+        raise AssertionError("indeterminate submit exposed task text")
+
+    failed = response_json(
+        await handler(
+            FakeContext(RaisingDriverManager()),
+            "workflow-status 0198a140-4d31-7dd4-8bcc-832b9a48cf34",
+        ),
+    )
+    assert_operation_result_schema(failed)
+    if failed["operation_status"] != "transport_failure" or failed["error"] != {
+        "code": "driver_exception",
+    }:
+        raise AssertionError("driver exception did not become a bounded failure")
+    if "private driver detail" in json.dumps(failed):
+        raise AssertionError("driver exception exposed raw detail")
     return len(cases)
 
 
@@ -755,12 +813,31 @@ def assert_result_contract(module: Any) -> int:
             "status": "error",
             "error": {"code": "outcome_unknown", "message": "raw detail"},
         },
+        correlation_id="0198a140-4d31-7dd4-8bcc-832b9a48cf34",
     )
     if outcome_unknown["retry_guidance"] != "check_status_before_retry":
         raise AssertionError("indeterminate submit did not require status")
     if outcome_unknown["error"] != {"code": "outcome_unknown"}:
         raise AssertionError("indeterminate submit exposed raw detail")
+    if outcome_unknown["correlation"] != {
+        "caller_id": "0198a140-4d31-7dd4-8bcc-832b9a48cf34",
+    }:
+        raise AssertionError("indeterminate submit lost its correlation id")
     assert_operation_result_schema(outcome_unknown)
+    normalized_result_cases += 1
+
+    missing_correlation = contract.normalize_tool_payload(
+        tool="vyane_workflow_submit",
+        mode="workflow-submit",
+        policy_profile="contract-test",
+        payload={
+            "status": "error",
+            "error": {"code": "outcome_unknown"},
+        },
+    )
+    if missing_correlation["error"] != {"code": "missing_correlation_id"}:
+        raise AssertionError("indeterminate submit accepted missing correlation")
+    assert_operation_result_schema(missing_correlation)
     normalized_result_cases += 1
 
     malformed = contract.normalize_tool_payload(

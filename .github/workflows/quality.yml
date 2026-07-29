@@ -39,6 +39,12 @@ jobs:
           VYANE_PAW_RUNTIME_DIR: >-
             ${{ runner.temp }}/vyane-paw-${{ github.run_id }}-${{ github.job }}-${{ github.run_attempt }}
         run: ./scripts/run-vp06-container.sh
+      - name: Run durable workflow against current vyane-rs main
+        env:
+          VYANE_PAW_COMPATIBILITY_LANE: candidate
+          VYANE_PAW_RUNTIME_DIR: >-
+            ${{ runner.temp }}/vyane-paw-${{ github.run_id }}-${{ github.job }}-${{ github.run_attempt }}-durable
+        run: ./scripts/run-vp08.sh
 
   qwenpaw-application:
     runs-on: [self-hosted, vyane-paw]

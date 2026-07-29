@@ -19,7 +19,7 @@
     "pinned_runtime_contracts": 12,
     "request_scoped_tool_boundaries": 4,
     "enforced_policy_denials": 9,
-    "normalized_result_cases": 13,
+    "normalized_result_cases": 14,
     "result_middleware_rewrites": 1,
     "durable_workflow_commands": 3,
     "fixed_private_paths": 0
