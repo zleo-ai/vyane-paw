@@ -9,6 +9,7 @@ import importlib.metadata
 import importlib.util
 import json
 import os
+import stat
 import tempfile
 import time
 from datetime import UTC, datetime
@@ -33,6 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--qwenpaw-client", type=Path, required=True)
     parser.add_argument("--vyane-bin", type=Path, required=True)
+    parser.add_argument("--rmcp-version", required=True)
     parser.add_argument("--upstreams-lock", type=Path, required=True)
     parser.add_argument("--evidence", type=Path, required=True)
     return parser.parse_args()
@@ -62,15 +64,47 @@ def result_payload(result: Any) -> dict[str, Any]:
     return payload
 
 
-def revision_map(lock_path: Path) -> dict[str, str]:
+def revision_map(
+    lock_path: Path,
+    rmcp_version: str,
+) -> dict[str, str]:
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
     upstreams = lock["upstreams"]
     return {
         "qwenpaw": upstreams["qwenpaw"]["revision"],
         "vyane_rs": upstreams["vyane_rs"]["revision"],
-        "rmcp": upstreams["rmcp"]["version"],
+        "rmcp": rmcp_version,
         "python_mcp": importlib.metadata.version("mcp"),
     }
+
+
+async def wait_for_file(path: Path, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    while not path.is_file():
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"timed out waiting for {path.name}")
+        await asyncio.sleep(0.05)
+
+
+def write_server_launcher(root: Path) -> tuple[Path, Path, Path]:
+    launcher = root / "launch-vyane.sh"
+    pid_file = root / "server.pid"
+    exit_status_file = root / "server-exit-status"
+    launcher.write_text(
+        """#!/usr/bin/env bash
+set +e
+"${VYANE_PAW_SERVER_BIN:?}" "$@" <&0 >&1 2>&2 &
+server_pid="$!"
+printf '%s\\n' "$server_pid" >"${VYANE_PAW_SERVER_PID_FILE:?}"
+wait "$server_pid"
+server_status="$?"
+printf '%s\\n' "$server_status" >"${VYANE_PAW_SERVER_EXIT_FILE:?}"
+exit "$server_status"
+""",
+        encoding="utf-8",
+    )
+    launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR)
+    return launcher, pid_file, exit_status_file
 
 
 async def run_smoke(args: argparse.Namespace) -> dict[str, Any]:
@@ -81,6 +115,7 @@ async def run_smoke(args: argparse.Namespace) -> dict[str, Any]:
         root = Path(temp)
         for name in ("home", "config", "data", "work"):
             (root / name).mkdir()
+        launcher, pid_file, exit_status_file = write_server_launcher(root)
 
         child_env = {
             "HOME": str(root / "home"),
@@ -88,12 +123,15 @@ async def run_smoke(args: argparse.Namespace) -> dict[str, Any]:
             "LC_ALL": "C.UTF-8",
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "RUST_LOG": "warn",
+            "VYANE_PAW_SERVER_BIN": str(args.vyane_bin),
+            "VYANE_PAW_SERVER_EXIT_FILE": str(exit_status_file),
+            "VYANE_PAW_SERVER_PID_FILE": str(pid_file),
             "VYANE_DATA_DIR": str(root / "data"),
             "XDG_CONFIG_HOME": str(root / "config"),
         }
         client = client_type(
             name="vyane-paw-vp01",
-            command=str(args.vyane_bin),
+            command=str(launcher),
             args=["mcp"],
             env=child_env,
             cwd=str(root / "work"),
@@ -135,18 +173,40 @@ async def run_smoke(args: argparse.Namespace) -> dict[str, Any]:
         if client.is_connected or client._lifecycle_task is not None:
             raise AssertionError("QwenPaw client lifecycle did not close")
 
+        await wait_for_file(pid_file, timeout=5)
+        await wait_for_file(exit_status_file, timeout=5)
+        server_pid = int(pid_file.read_text(encoding="utf-8").strip())
+        server_exit_code = int(
+            exit_status_file.read_text(encoding="utf-8").strip(),
+        )
+        if server_exit_code != 0:
+            raise AssertionError(
+                f"Vyane server exited with code {server_exit_code}",
+            )
+        try:
+            os.kill(server_pid, 0)
+        except ProcessLookupError:
+            server_process_reaped = 1
+        else:
+            raise AssertionError("Vyane server process was not reaped")
+
     return {
         "schema_version": "0.1.0",
         "scenario": "compatibility",
         "sanitization_state": "sanitized",
         "started_at": datetime.now(UTC).isoformat(),
         "duration_ms": round((time.monotonic() - started) * 1000),
-        "upstream_revisions": revision_map(args.upstreams_lock),
+        "upstream_revisions": revision_map(
+            args.upstreams_lock,
+            args.rmcp_version,
+        ),
         "result": "passed",
         "metrics": {
             "discovered_tools": len(EXPECTED_TOOLS),
             "successful_calls": 1,
             "rejected_invalid_calls": 1,
+            "server_exit_code": server_exit_code,
+            "server_process_reaped": server_process_reaped,
         },
         "limitations": [
             "stdio transport only",

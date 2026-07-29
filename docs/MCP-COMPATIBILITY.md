@@ -31,12 +31,17 @@ application integration.
 The sanitized baseline is `evidence/vp01-baseline.json`. CI and independent
 review remain required before VP-01 is marked complete.
 
+The smoke reads the resolved `rmcp` version from the pinned `vyane-rs`
+`Cargo.lock` and rejects any mismatch with `upstreams.lock.json`. Python
+compatibility dependencies are exact fixture versions rather than production
+application constraints.
+
 ## Validation matrix
 
 | Capability | Phase 1 expectation | Evidence |
 | --- | --- | --- |
-| Process launch and clean shutdown | Required | exit status and bounded log |
-| Legacy initialize handshake | Required | sanitized transcript |
+| Process launch and clean shutdown | Required | exit code and reaped-process assertion |
+| Legacy initialize handshake | Required | completed pinned-client smoke |
 | Tool discovery | Required | expected tool-name set |
 | One tool call | Required | request/result fixture |
 | Error propagation | Required | deterministic negative fixture |

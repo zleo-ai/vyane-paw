@@ -9,9 +9,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   repository:
     runs-on: [self-hosted, vyane-paw]
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - name: Validate repository

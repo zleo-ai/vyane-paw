@@ -12,6 +12,12 @@ done
 
 uv run --project compat --locked ruff check compat/smoke.py
 uv run --project compat --locked ruff format --check compat/smoke.py
+uv run --project compat --locked check-jsonschema \
+  --schemafile schemas/evidence.schema.json \
+  evidence/*.json
+uv run --project compat --locked check-jsonschema \
+  --schemafile schemas/policy.schema.json \
+  schemas/examples/*.policy.json
 
 forbidden_tracked="$(
   git ls-files |

@@ -13,6 +13,9 @@ qwenpaw_revision="$(
 vyane_revision="$(
   jq -r '.upstreams.vyane_rs.revision' "$repo_root/upstreams.lock.json"
 )"
+declared_rmcp_version="$(
+  jq -r '.upstreams.rmcp.version' "$repo_root/upstreams.lock.json"
+)"
 
 prepare_upstream() {
   local repository="$1"
@@ -59,6 +62,26 @@ cargo build \
   --package vyane-cli \
   --bin vyane
 
+locked_rmcp_version="$(
+  cargo metadata \
+    --locked \
+    --manifest-path "$vyane_dir/Cargo.toml" \
+    --format-version 1 |
+    jq -er '
+      [.packages[] | select(.name == "rmcp") | .version]
+      | unique
+      | if length == 1 then .[0]
+        else error("expected exactly one locked rmcp version")
+        end
+    '
+)"
+
+if [[ "$locked_rmcp_version" != "$declared_rmcp_version" ]]; then
+  echo "rmcp version mismatch: upstream lock declares $declared_rmcp_version" >&2
+  echo "but pinned vyane-rs Cargo.lock resolves $locked_rmcp_version" >&2
+  exit 1
+fi
+
 uv run \
   --project "$repo_root/compat" \
   --locked \
@@ -66,6 +89,7 @@ uv run \
   --qwenpaw-client \
   "$qwenpaw_dir/src/qwenpaw/drivers/handlers/mcp_stateful_client.py" \
   --vyane-bin "$vyane_dir/target/debug/vyane" \
+  --rmcp-version "$locked_rmcp_version" \
   --upstreams-lock "$repo_root/upstreams.lock.json" \
   --evidence "$evidence_path"
 
