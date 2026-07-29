@@ -20,6 +20,7 @@
       "enum": [
         "compatibility",
         "product_entry",
+        "qwenpaw_application",
         "route",
         "failover",
         "failure_isolation",

@@ -39,3 +39,16 @@ jobs:
           VYANE_PAW_RUNTIME_DIR: >-
             ${{ runner.temp }}/vyane-paw-${{ github.run_id }}-${{ github.job }}-${{ github.run_attempt }}
         run: ./scripts/run-vp06-container.sh
+
+  qwenpaw-application:
+    runs-on: [self-hosted, vyane-paw]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Run headless QwenPaw application integration
+        env:
+          VYANE_PAW_RUNTIME_DIR: >-
+            ${{ runner.temp }}/vyane-paw-${{ github.run_id }}-${{ github.job }}-${{ github.run_attempt }}
+        run: ./scripts/run-vp07.sh

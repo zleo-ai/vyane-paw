@@ -302,11 +302,16 @@ async def assert_command_contract(module: Any) -> dict[str, int]:
                     "subagent_allowed_tools": ["must-be-replaced"],
                 }
                 response = await handler(ctx, raw)
-                if response is not None or len(ctx.injections) != 1:
+                if response is not None or ctx.injections:
                     raise AssertionError(
-                        f"{mode} did not inject exactly one contract",
+                        f"{mode} used the incompatible message injection path",
                     )
-                content, metadata = ctx.injections[0]
+                result_contract = ctx.request.request_context.get(
+                    "vyane_paw_result_contract",
+                )
+                if not isinstance(result_contract, dict):
+                    raise AssertionError(f"{mode} has no result contract")
+                content = result_contract.get("system_prompt", "")
                 if f'"mode":"{mode}"' not in content:
                     raise AssertionError(f"{mode} was not preserved")
                 if selector and selector in content:
@@ -317,12 +322,13 @@ async def assert_command_contract(module: Any) -> dict[str, int]:
                     raise AssertionError(
                         "user task was promoted into system context",
                     )
-                expected_tool = {
+                raw_tool = {
                     "route": "vyane_route",
                     "dispatch": "vyane_dispatch",
                     "failover": "vyane_dispatch",
                     "review": "vyane_broadcast",
                 }[mode]
+                expected_tool = f"vyane-paw__{raw_tool}"
                 if f"Required MCP tool: {expected_tool}\n" not in content:
                     raise AssertionError(
                         f"{mode} did not bind the expected MCP tool",
@@ -330,10 +336,13 @@ async def assert_command_contract(module: Any) -> dict[str, int]:
                 if ctx.request.request_context != {
                     "trace_marker": "preserved",
                     "subagent_allowed_tools": [expected_tool],
+                    "subagent_skills": [],
                     "vyane_paw_result_contract": {
-                        "tool": expected_tool,
+                        "tool": raw_tool,
+                        "exposed_tool": expected_tool,
                         "mode": mode,
                         "policy_profile": "contract-test",
+                        "system_prompt": content,
                     },
                 }:
                     raise AssertionError(
@@ -377,13 +386,6 @@ async def assert_command_contract(module: Any) -> dict[str, int]:
                 if fixed_arguments != expected_arguments:
                     raise AssertionError(
                         f"{mode} fixed MCP arguments drifted",
-                    )
-                if metadata != {
-                    "priority": 20,
-                    "source": "plugin:vyane-paw",
-                }:
-                    raise AssertionError(
-                        "unexpected context injection metadata",
                     )
                 request_scoped_tool_boundaries += 1
         finally:
@@ -678,8 +680,10 @@ async def assert_result_middleware(module: Any) -> int:
     ctx.request.request_context = {
         "vyane_paw_result_contract": {
             "tool": "vyane_dispatch",
+            "exposed_tool": "vyane-paw__vyane_dispatch",
             "mode": "dispatch",
             "policy_profile": "contract-test",
+            "system_prompt": "VYANE_PAW_SYSTEM_CONTRACT",
         },
     }
     middleware = module._result_middleware_factory(ctx, None)
@@ -687,6 +691,11 @@ async def assert_result_middleware(module: Any) -> int:
         raise AssertionError("result middleware factory returned None")
     if not isinstance(middleware, MiddlewareBase):
         raise AssertionError("result middleware does not implement AgentScope contract")
+    system_prompt = await middleware.on_system_prompt(None, "HOST_SYSTEM_PROMPT")
+    if system_prompt != "HOST_SYSTEM_PROMPT\n\nVYANE_PAW_SYSTEM_CONTRACT":
+        raise AssertionError("middleware did not append the turn system contract")
+    if await middleware.on_system_prompt(None, system_prompt) != system_prompt:
+        raise AssertionError("middleware duplicated the turn system contract")
     response = ToolResponse(
         id="call-contract",
         content=[
@@ -707,7 +716,7 @@ async def assert_result_middleware(module: Any) -> int:
     async def next_handler():
         yield response
 
-    tool_call = types.SimpleNamespace(name="vyane_dispatch")
+    tool_call = types.SimpleNamespace(name="vyane-paw__vyane_dispatch")
     events = [
         event
         async for event in middleware.on_acting(

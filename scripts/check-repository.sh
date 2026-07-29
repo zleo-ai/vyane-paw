@@ -5,6 +5,7 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
 bash -n bin/* scripts/*.sh
+uv lock --check --project compat/qwenpaw-app
 
 for file in upstreams.lock.json schemas/*.json config/examples/*.json evidence/*.json; do
   jq empty "$file"

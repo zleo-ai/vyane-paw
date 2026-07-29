@@ -1,3 +1,8 @@
+---
+name: vyane-paw
+description: Route, dispatch, fail over, or review through the Vyane MCP boundary.
+---
+
 # Vyane Paw
 
 Use this Skill when the user invokes `/vyane` or explicitly asks QwenPaw to
