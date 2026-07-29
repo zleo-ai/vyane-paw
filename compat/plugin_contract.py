@@ -16,12 +16,39 @@ import time
 import types
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
+from functools import cache
 from pathlib import Path
 from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_DIR = ROOT / "qwenpaw-plugin"
+
+
+@cache
+def operation_result_validator() -> Any:
+    from jsonschema.validators import validator_for
+
+    schema = json.loads(
+        (ROOT / "schemas" / "operation-result.schema.json").read_text(
+            encoding="utf-8",
+        ),
+    )
+    validator_class = validator_for(schema)
+    validator_class.check_schema(schema)
+    return validator_class(schema)
+
+
+def assert_operation_result_schema(instance: dict[str, Any]) -> None:
+    errors = sorted(
+        operation_result_validator().iter_errors(instance),
+        key=lambda error: error.path,
+    )
+    if errors:
+        raise AssertionError(
+            "normalized result violates operation-result schema: "
+            + "; ".join(error.message for error in errors),
+        )
 
 
 def load_plugin_module() -> Any:
@@ -214,7 +241,7 @@ def assert_manifest(qwenpaw_architecture: Path | None) -> int:
     return runtime_contracts
 
 
-async def assert_command_contract(module: Any) -> None:
+async def assert_command_contract(module: Any) -> dict[str, int]:
     api = FakeApi()
     module.plugin.register(api)
     if api.command is None or api.skill_provider is None or api.middleware is None:
@@ -236,6 +263,7 @@ async def assert_command_contract(module: Any) -> None:
         raise AssertionError("unexpected result middleware priority")
 
     handler = command_args[1]
+    request_scoped_tool_boundaries = 0
     policy = {
         "schema_version": "0.1.0",
         "profile": "contract-test",
@@ -357,16 +385,17 @@ async def assert_command_contract(module: Any) -> None:
                     raise AssertionError(
                         "unexpected context injection metadata",
                     )
+                request_scoped_tool_boundaries += 1
         finally:
             if previous_policy is None:
                 os.environ.pop("VYANE_PAW_POLICY", None)
             else:
                 os.environ["VYANE_PAW_POLICY"] = previous_policy
 
-    await assert_policy_enforcement(module, handler)
+    enforced_policy_denials = await assert_policy_enforcement(module, handler)
     assert_policy_validation(module)
-    assert_result_contract(module)
-    await assert_result_middleware(module)
+    normalized_result_cases = assert_result_contract(module)
+    result_middleware_rewrites = await assert_result_middleware(module)
 
     invalid = (
         "",
@@ -384,29 +413,17 @@ async def assert_command_contract(module: Any) -> None:
         except ValueError:
             continue
         raise AssertionError(f"invalid command was accepted: {raw!r}")
+    return {
+        "request_scoped_tool_boundaries": request_scoped_tool_boundaries,
+        "enforced_policy_denials": enforced_policy_denials,
+        "normalized_result_cases": normalized_result_cases,
+        "result_middleware_rewrites": result_middleware_rewrites,
+    }
 
 
-def assert_result_contract(module: Any) -> None:
-    from jsonschema.validators import validator_for
-
+def assert_result_contract(module: Any) -> int:
     contract = importlib.import_module(f"{module.__name__}.result_contract")
-    result_schema = json.loads(
-        (ROOT / "schemas" / "operation-result.schema.json").read_text(
-            encoding="utf-8",
-        ),
-    )
-    validator_class = validator_for(result_schema)
-    validator_class.check_schema(result_schema)
-    validator = validator_class(result_schema)
-
-    def assert_schema(instance: dict[str, Any]) -> None:
-        errors = sorted(validator.iter_errors(instance), key=lambda error: error.path)
-        if errors:
-            raise AssertionError(
-                "normalized result violates operation-result schema: "
-                + "; ".join(error.message for error in errors),
-            )
-
+    normalized_result_cases = 0
     cases = [
         (
             "vyane_route",
@@ -464,7 +481,8 @@ def assert_result_contract(module: Any) -> None:
             raise AssertionError(f"{mode} result normalization drifted")
         if normalized["retry_guidance"] != "do_not_retry":
             raise AssertionError(f"{mode} result became retryable")
-        assert_schema(normalized)
+        assert_operation_result_schema(normalized)
+        normalized_result_cases += 1
 
     rejected = contract.normalize_tool_payload(
         tool="vyane_dispatch",
@@ -484,7 +502,8 @@ def assert_result_contract(module: Any) -> None:
         raise AssertionError("raw upstream error crossed the result contract")
     if "data" in rejected:
         raise AssertionError("rejected result included completed data")
-    assert_schema(rejected)
+    assert_operation_result_schema(rejected)
+    normalized_result_cases += 1
 
     malformed = contract.normalize_tool_payload(
         tool="vyane_dispatch",
@@ -494,7 +513,8 @@ def assert_result_contract(module: Any) -> None:
     )
     if malformed["operation_status"] != "protocol_failure":
         raise AssertionError("unexpected operation status did not fail closed")
-    assert_schema(malformed)
+    assert_operation_result_schema(malformed)
+    normalized_result_cases += 1
 
     transport = contract.normalize_tool_payload(
         tool="vyane_dispatch",
@@ -514,7 +534,8 @@ def assert_result_contract(module: Any) -> None:
         raise AssertionError("raw driver error crossed the result contract")
     if "data" in transport:
         raise AssertionError("transport failure included completed data")
-    assert_schema(transport)
+    assert_operation_result_schema(transport)
+    normalized_result_cases += 1
 
     raw_marker = "must-not-cross-contract"
     projected = contract.normalize_tool_payload(
@@ -543,7 +564,8 @@ def assert_result_contract(module: Any) -> None:
         raise AssertionError("completed result exposed unbounded upstream data")
     if "error" in projected:
         raise AssertionError("completed result included envelope error")
-    assert_schema(projected)
+    assert_operation_result_schema(projected)
+    normalized_result_cases += 1
 
     unknown = contract.normalize_tool_payload(
         tool="vyane_broadcast",
@@ -560,7 +582,8 @@ def assert_result_contract(module: Any) -> None:
     )
     if unknown["outcome"] != "unknown":
         raise AssertionError("unknown broadcast status did not fail closed")
-    assert_schema(unknown)
+    assert_operation_result_schema(unknown)
+    normalized_result_cases += 1
 
     selected = contract.payload_from_text_blocks(
         [
@@ -578,6 +601,7 @@ def assert_result_contract(module: Any) -> None:
     )
     if selected is None or selected.get("operation_status") != "completed":
         raise AssertionError("structured result selection drifted")
+    return normalized_result_cases
 
 
 def assert_policy_validation(module: Any) -> None:
@@ -640,7 +664,7 @@ def assert_policy_validation(module: Any) -> None:
         raise AssertionError("malformed or unauthorized execution plan was accepted")
 
 
-async def assert_result_middleware(module: Any) -> None:
+async def assert_result_middleware(module: Any) -> int:
     from agentscope.message import TextBlock
     from agentscope.middleware import MiddlewareBase
     from agentscope.tool import ToolResponse
@@ -696,6 +720,7 @@ async def assert_result_middleware(module: Any) -> None:
     normalized = json.loads(response.content[0].text)
     if normalized["operation_status"] != "completed":
         raise AssertionError("result middleware did not normalize payload")
+    assert_operation_result_schema(normalized)
     if response.metadata != {
         "existing": "preserved",
         "vyane_paw_result_schema": "0.1.0",
@@ -726,9 +751,11 @@ async def assert_result_middleware(module: Any) -> None:
         "existing": "preserved",
     }:
         raise AssertionError("result middleware mutated an unrelated tool result")
+    return 1
 
 
-async def assert_policy_enforcement(module: Any, handler: Any) -> None:
+async def assert_policy_enforcement(module: Any, handler: Any) -> int:
+    enforced_policy_denials = 0
     previous_policy = os.environ.pop("VYANE_PAW_POLICY", None)
     try:
         default_route = FakeContext()
@@ -745,6 +772,7 @@ async def assert_policy_enforcement(module: Any, handler: Any) -> None:
         ):
             raise AssertionError("default policy mutated a denied failover request")
         assert_bounded_denial(denied, ["resilient"])
+        enforced_policy_denials += 1
 
         default_review = FakeContext()
         denied = await handler(default_review, "review reviewer-a,reviewer-b -- task")
@@ -754,6 +782,7 @@ async def assert_policy_enforcement(module: Any, handler: Any) -> None:
         ):
             raise AssertionError("default policy mutated a denied review request")
         assert_bounded_denial(denied, ["reviewer-a", "reviewer-b"])
+        enforced_policy_denials += 1
 
         restrictive = {
             "schema_version": "0.1.0",
@@ -776,6 +805,7 @@ async def assert_policy_enforcement(module: Any, handler: Any) -> None:
             ):
                 raise AssertionError("tool policy did not deny route")
             assert_bounded_denial(response, [str(policy_path)])
+            enforced_policy_denials += 1
 
             too_many = FakeContext()
             response = await handler(
@@ -790,6 +820,7 @@ async def assert_policy_enforcement(module: Any, handler: Any) -> None:
                 response,
                 ["reviewer-a", "reviewer-b", "reviewer-c", str(policy_path)],
             )
+            enforced_policy_denials += 1
 
             unknown_target = FakeContext()
             response = await handler(
@@ -807,6 +838,7 @@ async def assert_policy_enforcement(module: Any, handler: Any) -> None:
                 response,
                 ["reviewer-a", "reviewer-c", str(policy_path)],
             )
+            enforced_policy_denials += 1
 
             policy_path.write_text("{invalid", encoding="utf-8")
             invalid_policy = FakeContext()
@@ -819,6 +851,7 @@ async def assert_policy_enforcement(module: Any, handler: Any) -> None:
                     "invalid policy did not fail closed",
                 )
             assert_bounded_denial(response, [str(policy_path)])
+            enforced_policy_denials += 1
 
             missing_path = Path(tmp) / "missing-policy.json"
             os.environ["VYANE_PAW_POLICY"] = str(missing_path)
@@ -830,6 +863,7 @@ async def assert_policy_enforcement(module: Any, handler: Any) -> None:
             ):
                 raise AssertionError("unreadable policy did not fail closed")
             assert_bounded_denial(response, [str(missing_path)])
+            enforced_policy_denials += 1
 
             policy_path.write_text(
                 json.dumps(
@@ -851,11 +885,13 @@ async def assert_policy_enforcement(module: Any, handler: Any) -> None:
             ):
                 raise AssertionError("schema-invalid policy did not fail closed")
             assert_bounded_denial(response, [str(policy_path)])
+            enforced_policy_denials += 1
     finally:
         if previous_policy is None:
             os.environ.pop("VYANE_PAW_POLICY", None)
         else:
             os.environ["VYANE_PAW_POLICY"] = previous_policy
+    return enforced_policy_denials
 
 
 def assert_launcher() -> None:
@@ -901,7 +937,7 @@ def main() -> None:
     started = time.monotonic()
     runtime_contracts = assert_manifest(args.qwenpaw_architecture)
     module = load_plugin_module()
-    asyncio.run(assert_command_contract(module))
+    product_contract_metrics = asyncio.run(assert_command_contract(module))
     assert_launcher()
     allowlisted_tools = assert_mcp_import()
     if args.evidence is not None:
@@ -926,10 +962,7 @@ def main() -> None:
                 "validated_product_modes": 4,
                 "allowlisted_mcp_tools": allowlisted_tools,
                 "pinned_runtime_contracts": runtime_contracts,
-                "request_scoped_tool_boundaries": 4,
-                "enforced_policy_denials": 8,
-                "normalized_result_cases": 9,
-                "result_middleware_rewrites": 1,
+                **product_contract_metrics,
                 "fixed_private_paths": 0,
             },
             "limitations": [
