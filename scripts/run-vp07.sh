@@ -20,7 +20,14 @@ if ! grep -Fq -- "$qwenpaw_revision" "$app_project/uv.lock"; then
   exit 1
 fi
 
-PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+env \
+  -u PIP_EXTRA_INDEX_URL \
+  -u PIP_INDEX_URL \
+  -u UV_EXTRA_INDEX_URL \
+  -u UV_INDEX \
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+  UV_DEFAULT_INDEX=https://pypi.org/simple \
+  UV_NO_CONFIG=1 \
   UV_PROJECT_ENVIRONMENT="$app_venv" \
   uv sync \
     --project "$app_project" \
@@ -51,10 +58,13 @@ jq -e \
   '.result == "passed"
    and .metrics.app_exit_code == 0
    and .metrics.app_process_reaped == 1
+   and .metrics.first_phase_mcp_reaped == 1
    and .metrics.mcp_process_reaped == 1
    and .metrics.model_visible_tools == 1
    and .metrics.normalized_results == 1
-   and .metrics.operator_interventions == 0' \
+   and .metrics.operator_interventions == 0
+   and .metrics.request_scope_resets == 1
+   and .metrics.system_contract_model_calls >= 1' \
   "$evidence_path" \
   >/dev/null
 

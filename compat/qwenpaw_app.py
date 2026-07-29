@@ -10,6 +10,7 @@ import signal
 import socket
 import stat
 import subprocess
+import sys
 import threading
 import time
 from datetime import UTC, datetime
@@ -23,6 +24,7 @@ import httpx
 MCP_CLIENT_KEY = "vyane-paw"
 EXPOSED_ROUTE_TOOL = "vyane-paw__vyane_route"
 RAW_PRODUCT_TOOLS = ["vyane_broadcast", "vyane_dispatch", "vyane_route"]
+EXPOSED_PRODUCT_TOOLS = [f"{MCP_CLIENT_KEY}__{tool}" for tool in RAW_PRODUCT_TOOLS]
 SENSITIVE_ENV_NAMES = {
     "ANTHROPIC_API_KEY",
     "DASHSCOPE_API_KEY",
@@ -88,6 +90,9 @@ class SyntheticModelHandler(BaseHTTPRequestHandler):
             for message in messages
             if isinstance(message, dict) and message.get("role") == "tool"
         ]
+        if "ordinary cleanup check" in json.dumps(messages, ensure_ascii=False):
+            self._stream_text("Ordinary turn received.")
+            return
         if tools and not tool_messages:
             self._stream_tool_call()
             return
@@ -294,7 +299,7 @@ def start_app(
 ) -> subprocess.Popen[Any]:
     return subprocess.Popen(
         [
-            os.sys.executable,
+            sys.executable,
             "-m",
             "qwenpaw",
             "app",
@@ -448,6 +453,23 @@ def request_summary(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def contract_fragment(payload: dict[str, Any]) -> str:
+    messages = payload.get("messages")
+    serialized = json.dumps(
+        messages if isinstance(messages, list) else [],
+        ensure_ascii=False,
+        default=str,
+    )
+    start = serialized.find("Vyane Paw command contract")
+    if start < 0:
+        return ""
+    end_marker = "Policy schema version: 0.1.0"
+    end = serialized.find(end_marker, start)
+    if end < 0:
+        return serialized[start:]
+    return serialized[start : end + len(end_marker)]
+
+
 def process_alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
@@ -456,6 +478,26 @@ def process_alive(pid: int) -> bool:
     except PermissionError:
         return True
     return True
+
+
+def wait_for_pid_file(path: Path, timeout: float) -> int:
+    deadline = time.monotonic() + timeout
+    while not path.is_file() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    if not path.is_file():
+        raise AssertionError("Vyane MCP process was not observed")
+    pid = int(path.read_text(encoding="utf-8").strip())
+    if pid <= 0:
+        raise AssertionError("Vyane MCP process wrote an invalid pid")
+    return pid
+
+
+def wait_for_process_exit(pid: int, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    while process_alive(pid) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    if process_alive(pid):
+        raise AssertionError("Vyane MCP process was not reaped")
 
 
 def write_vyane_fixture(root: Path, launcher: Path) -> tuple[Path, Path]:
@@ -641,16 +683,20 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 enabled_tools = sorted(
                     item["name"] for item in listed_tools if item.get("enabled")
                 )
-                if enabled_tools != RAW_PRODUCT_TOOLS:
+                if enabled_tools != sorted(RAW_PRODUCT_TOOLS):
                     raise AssertionError(
                         "MCP tools drifted after provider-triggered reload",
                     )
                 install_plugin(client, app_url, args.plugin_dir.resolve(), 30)
+                pid_path = root / "vyane-mcp.pid"
+                initial_mcp_pid = wait_for_pid_file(pid_path, 10)
                 initial_exit_code = stop_app(app_process)
                 if initial_exit_code != 0:
                     raise AssertionError(
                         f"QwenPaw installation phase exited with {initial_exit_code}",
                     )
+                wait_for_process_exit(initial_mcp_pid, 10)
+                pid_path.unlink(missing_ok=True)
                 app_process = start_app(
                     env=app_env,
                     port=app_port,
@@ -661,7 +707,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 enabled_tools = sorted(
                     item["name"] for item in listed_tools if item.get("enabled")
                 )
-                if enabled_tools != RAW_PRODUCT_TOOLS:
+                if enabled_tools != sorted(RAW_PRODUCT_TOOLS):
                     raise AssertionError(
                         "MCP tools drifted after installed-plugin restart",
                     )
@@ -701,21 +747,114 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 if not isinstance(result, dict) or result.get("status") != "completed":
                     raise AssertionError(f"QwenPaw task failed: {final}")
 
+                cleanup_submission = request(
+                    client,
+                    "POST",
+                    app_url,
+                    "/api/console/chat/task",
+                    json={
+                        "channel": "console",
+                        "user_id": "vyane-paw-headless",
+                        "session_id": "vyane-paw-headless",
+                        "timeout": 45,
+                        "request_context": {"approval_level": "off"},
+                        "input": [
+                            {
+                                "role": "user",
+                                "type": "message",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": "ordinary cleanup check",
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ).json()
+                cleanup_final = wait_for_task(
+                    client,
+                    app_url,
+                    cleanup_submission["task_id"],
+                    60,
+                )
+                cleanup_result = cleanup_final.get("result")
+                if (
+                    not isinstance(cleanup_result, dict)
+                    or cleanup_result.get("status") != "completed"
+                ):
+                    raise AssertionError(
+                        f"QwenPaw cleanup turn failed: {cleanup_final}",
+                    )
+
                 with model_state.lock:
                     requests = list(model_state.requests)
                     tool_results = list(model_state.tool_results)
-                visible_surfaces = [
-                    names for payload in requests if (names := tool_names(payload))
+                summaries = [
+                    (payload, request_summary(payload)) for payload in requests
                 ]
-                if not visible_surfaces or any(
-                    surface != [EXPOSED_ROUTE_TOOL] for surface in visible_surfaces
+                command_requests = [
+                    (payload, summary)
+                    for payload, summary in summaries
+                    if "/vyane route synthetic docs request" in summary["last_user"]
+                ]
+                cleanup_requests = [
+                    (payload, summary)
+                    for payload, summary in summaries
+                    if "ordinary cleanup check" in summary["last_user"]
+                ]
+                if not command_requests or any(
+                    summary["tools"] != [EXPOSED_ROUTE_TOOL]
+                    for _, summary in command_requests
                 ):
                     raise AssertionError(
                         "unexpected model-visible tool surfaces: "
                         + json.dumps(
-                            [request_summary(payload) for payload in requests],
+                            [summary for _, summary in summaries],
                             ensure_ascii=False,
                         ),
+                    )
+                if any(
+                    not summary["has_vyane_contract"] for _, summary in command_requests
+                ):
+                    raise AssertionError(
+                        "Vyane command contract did not enter every model call",
+                    )
+                for payload, _ in command_requests:
+                    messages = payload.get("messages", [])
+                    system_text = json.dumps(
+                        [
+                            message
+                            for message in messages
+                            if isinstance(message, dict)
+                            and message.get("role") == "system"
+                        ],
+                        ensure_ascii=False,
+                    )
+                    user_text = json.dumps(
+                        [
+                            message
+                            for message in messages
+                            if isinstance(message, dict)
+                            and message.get("role") == "user"
+                        ],
+                        ensure_ascii=False,
+                    )
+                    if (
+                        "Vyane Paw command contract" not in system_text
+                        or "Vyane Paw command contract" in user_text
+                    ):
+                        raise AssertionError(
+                            "Vyane contract crossed its system/user boundary",
+                        )
+                if not cleanup_requests or any(
+                    summary["has_vyane_contract"]
+                    or len(summary["tools"]) <= 1
+                    or not set(EXPOSED_PRODUCT_TOOLS).issubset(summary["tools"])
+                    for _, summary in cleanup_requests
+                ):
+                    raise AssertionError(
+                        "Vyane request scope leaked into the ordinary next turn",
                     )
                 if len(tool_results) != 1:
                     raise AssertionError(
@@ -746,23 +885,31 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 serialized = json.dumps(normalized, ensure_ascii=False)
                 forbidden = [
                     str(root),
+                    str(root / "app-home"),
+                    str(root / "backups"),
+                    str(root / "data"),
+                    str(root / "secret"),
+                    str(root / "working"),
+                    str(root / "xdg-config"),
+                    str(config_path),
                     str(args.plugin_dir.resolve()),
                     str(args.vyane_bin.resolve()),
                     model_url,
+                    "http://127.0.0.1:9",
                     "synthetic-key",
                 ]
                 if any(marker in serialized for marker in forbidden):
                     raise AssertionError(
                         "normalized result leaked private runtime data"
                     )
-
-                pid_path = root / "vyane-mcp.pid"
-                deadline = time.monotonic() + 10
-                while not pid_path.is_file() and time.monotonic() < deadline:
-                    time.sleep(0.05)
-                if not pid_path.is_file():
-                    raise AssertionError("Vyane MCP process was not observed")
-                mcp_pid = int(pid_path.read_text(encoding="utf-8").strip())
+                model_contracts = "\n".join(
+                    contract_fragment(payload) for payload in requests
+                )
+                if any(marker in model_contracts for marker in forbidden):
+                    raise AssertionError(
+                        "model-visible Vyane contract leaked private runtime data",
+                    )
+                mcp_pid = wait_for_pid_file(pid_path, 10)
         app_exit_code = stop_app(app_process)
     finally:
         if app_process is not None and app_process.poll() is None:
@@ -773,8 +920,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
 
     if app_exit_code != 0:
         raise AssertionError(f"QwenPaw app exited with {app_exit_code}")
-    if mcp_pid <= 0 or process_alive(mcp_pid):
-        raise AssertionError("Vyane MCP process was not reaped")
+    wait_for_process_exit(mcp_pid, 10)
     lock = json.loads(args.upstreams_lock.read_text(encoding="utf-8"))
     upstreams = lock["upstreams"]
     return {
@@ -792,10 +938,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "metrics": {
             "app_exit_code": app_exit_code,
             "app_process_reaped": 1,
+            "first_phase_mcp_reaped": 1,
             "mcp_process_reaped": 1,
             "model_visible_tools": 1,
             "normalized_results": 1,
             "operator_interventions": 0,
+            "request_scope_resets": 1,
+            "system_contract_model_calls": len(command_requests),
         },
         "limitations": [
             "headless local FastAPI application only",
