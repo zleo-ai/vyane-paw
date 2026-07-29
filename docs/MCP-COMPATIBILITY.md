@@ -15,11 +15,11 @@ implemented by Vyane Paw.
 
 ## Verified compatibility boundary
 
-The direct stdio connection passed locally on 2026-07-29 at the pinned
-revisions. The QwenPaw client completed its stateful initialization lifecycle
-against the `rmcp` 3.0 server, discovered the exact nine-tool surface, completed
-one safe call, received a structured invalid-argument response, and closed
-cleanly.
+The direct stdio connection passed locally and in self-hosted CI on 2026-07-29
+at the pinned revisions. The QwenPaw client completed its stateful
+initialization lifecycle against the `rmcp` 3.0 server, discovered the exact
+nine-tool surface, completed one safe call, received a structured
+invalid-argument response, and closed cleanly.
 
 The executable smoke test is `scripts/run-vp01.sh`. It loads the pinned,
 unmodified QwenPaw `StdIOStatefulClient` module with QwenPaw-compatible Python
@@ -28,8 +28,9 @@ tool set, performs one safe call and one invalid-argument call, then verifies
 clean lifecycle shutdown. It intentionally does not claim full QwenPaw
 application integration.
 
-The sanitized baseline is `evidence/vp01-baseline.json`. CI and independent
-review remain required before VP-01 is marked complete.
+The sanitized baseline is `evidence/vp01-baseline.json`. VP-01 is complete
+after self-hosted CI and an independent GLM-5.2 review through the official GLM
+Coding Plan both passed.
 
 The smoke reads the resolved `rmcp` version from the pinned `vyane-rs`
 `Cargo.lock` and rejects any mismatch with `upstreams.lock.json`. Python
