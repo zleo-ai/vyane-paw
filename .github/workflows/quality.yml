@@ -18,8 +18,24 @@ jobs:
     runs-on: [self-hosted, vyane-paw]
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
       - name: Validate repository
         run: ./scripts/check-repository.sh
       - name: Run compatibility, demo-flow, and product-entry smoke
         run: ./scripts/run-vp03.sh
+
+  candidate:
+    runs-on: [self-hosted, vyane-paw]
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Probe current vyane-rs main
+        env:
+          VYANE_PAW_RUNTIME_DIR: >-
+            ${{ runner.temp }}/vyane-paw-${{ github.run_id }}-${{ github.job }}-${{ github.run_attempt }}
+        run: ./scripts/run-vp06-container.sh

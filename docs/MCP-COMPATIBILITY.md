@@ -37,6 +37,41 @@ The smoke reads the resolved `rmcp` version from the pinned `vyane-rs`
 compatibility dependencies are exact fixture versions rather than production
 application constraints.
 
+## Stable and candidate lanes
+
+The compatibility boundary now has two deliberately different lanes:
+
+- `scripts/run-vp01.sh` is the required stable gate. It uses only the exact
+  revisions in `upstreams.lock.json` and produces reproducible evidence.
+- `scripts/run-vp06.sh` is a moving candidate canary. It resolves public
+  vyane-rs `main`, freezes that individual run to the resolved commit, and
+  records the actual commit in ignored runtime evidence.
+
+The candidate checkout and evidence path are isolated from the stable lane.
+Its CI job is visible but advisory: an upstream candidate failure must not
+rewrite the last proven stable claim. Promoting a candidate requires updating
+the stable lock and completing the required CI and independent review gates.
+The same canary is scheduled for 06:20 Asia/Shanghai and supports manual
+dispatch; GitHub schedules are best-effort, while an executed scheduled run
+fails visibly when current upstream `main` breaks the boundary.
+
+Candidate source is same-owner but moving code and is therefore never executed
+directly on the persistent self-hosted runner. The runner builds a digest-pinned
+Rust/uv image from `compat/candidate.Dockerfile`, then runs the candidate build
+and smoke inside a read-only, capability-dropped container with no Docker
+socket and no persisted checkout credential. The container sees a read-only
+`git archive` of tracked Vyane Paw files rather than the checkout or its ignored
+runtime data, plus one per-job temporary runtime directory read-write. A
+candidate job must not receive production secrets or mount other host data.
+Only credential-free public proxy variables may cross the boundary; host
+`NO_PROXY` values are not forwarded because they can reveal internal domains,
+and the container receives loopback-only bypasses instead. Network access is
+required to resolve and build the public candidate, while the fixed Rust
+toolchain is intentionally read-only: a new upstream toolchain requirement is a
+visible compatibility failure rather than an implicit runtime installation.
+System package versions are resolved when the disposable canary image is built;
+they are not part of the stable compatibility claim.
+
 ## Validation matrix
 
 | Capability | Phase 1 expectation | Evidence |

@@ -1,21 +1,52 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(git rev-parse --show-toplevel)"
+repo_root="${VYANE_PAW_REPO_ROOT:-$(git rev-parse --show-toplevel)}"
 runtime_root="${VYANE_PAW_RUNTIME_DIR:-$repo_root/runtime}"
-qwenpaw_dir="$runtime_root/qwenpaw-src"
-vyane_dir="$runtime_root/vyane-rs-src"
-evidence_path="${VYANE_PAW_EVIDENCE_PATH:-$runtime_root/evidence/vp01.json}"
+compatibility_lane="${VYANE_PAW_COMPATIBILITY_LANE:-stable}"
 
 qwenpaw_revision="$(
   jq -r '.upstreams.qwenpaw.revision' "$repo_root/upstreams.lock.json"
 )"
-vyane_revision="$(
+qwenpaw_repository="$(
+  jq -r '.upstreams.qwenpaw.repository' "$repo_root/upstreams.lock.json"
+)"
+vyane_repository="$(
+  jq -r '.upstreams.vyane_rs.repository' "$repo_root/upstreams.lock.json"
+)"
+stable_vyane_revision="$(
   jq -r '.upstreams.vyane_rs.revision' "$repo_root/upstreams.lock.json"
 )"
 declared_rmcp_version="$(
   jq -r '.upstreams.rmcp.version' "$repo_root/upstreams.lock.json"
 )"
+
+case "$compatibility_lane" in
+  stable)
+    qwenpaw_dir="$runtime_root/qwenpaw-stable-src"
+    vyane_revision="$stable_vyane_revision"
+    vyane_dir="$runtime_root/vyane-rs-stable-src"
+    default_evidence_path="$runtime_root/evidence/vp01-stable.json"
+    ;;
+  candidate)
+    qwenpaw_dir="$runtime_root/qwenpaw-candidate-src"
+    vyane_revision="$(
+      git ls-remote "$vyane_repository" refs/heads/main |
+        awk 'NR == 1 { print $1 }'
+    )"
+    if [[ ! "$vyane_revision" =~ ^[0-9a-f]{40}$ ]]; then
+      echo "unable to resolve the vyane-rs candidate main revision" >&2
+      exit 1
+    fi
+    vyane_dir="$runtime_root/vyane-rs-candidate-src"
+    default_evidence_path="$runtime_root/evidence/vp01-candidate.json"
+    ;;
+  *)
+    echo "unsupported compatibility lane: $compatibility_lane" >&2
+    exit 1
+    ;;
+esac
+evidence_path="${VYANE_PAW_EVIDENCE_PATH:-$default_evidence_path}"
 
 prepare_upstream() {
   local repository="$1"
@@ -48,11 +79,11 @@ prepare_upstream() {
 
 mkdir -p "$runtime_root"
 prepare_upstream \
-  "https://github.com/agentscope-ai/QwenPaw.git" \
+  "$qwenpaw_repository" \
   "$qwenpaw_revision" \
   "$qwenpaw_dir"
 prepare_upstream \
-  "https://github.com/zleo-ai/vyane-rs.git" \
+  "$vyane_repository" \
   "$vyane_revision" \
   "$vyane_dir"
 
@@ -96,13 +127,21 @@ uv run \
   --qwenpaw-client \
   "$qwenpaw_dir/src/qwenpaw/drivers/handlers/mcp_stateful_client.py" \
   --vyane-bin "$vyane_dir/target/debug/vyane" \
+  --compatibility-lane "$compatibility_lane" \
+  --vyane-revision "$vyane_revision" \
   --rmcp-version "$locked_rmcp_version" \
   --upstreams-lock "$repo_root/upstreams.lock.json" \
   --evidence "$evidence_path"
 
 jq -e \
-  '.result == "passed" and .metrics.discovered_tools == 9' \
+  --arg lane "$compatibility_lane" \
+  --arg revision "$vyane_revision" \
+  '.result == "passed"
+   and .metrics.discovered_tools == 9
+   and .metrics.server_process_reaped == 1
+   and .upstream_revisions.compatibility_lane == $lane
+   and .upstream_revisions.vyane_rs == $revision' \
   "$evidence_path" \
   >/dev/null
 
-echo "VP-01 compatibility smoke passed."
+echo "VP-01 $compatibility_lane compatibility smoke passed at $vyane_revision."

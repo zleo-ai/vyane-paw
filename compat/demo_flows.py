@@ -12,7 +12,7 @@ import threading
 import time
 from contextlib import ExitStack
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -295,6 +295,14 @@ def evidence(
 
 async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
     client_type = load_qwenpaw_client(args.qwenpaw_client)
+    wall_clock_anchor = datetime.now(UTC)
+    monotonic_anchor = time.monotonic()
+
+    def evidence_started_at() -> datetime:
+        return wall_clock_anchor + timedelta(
+            seconds=time.monotonic() - monotonic_anchor,
+        )
+
     review_tracker = ConcurrencyTracker()
     states = {
         "route": EndpointState("route-answer"),
@@ -352,7 +360,7 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
             try:
                 await client.connect(timeout=30)
 
-                route_started_at = datetime.now(UTC)
+                route_started_at = evidence_started_at()
                 route_started = time.monotonic()
                 # vyane_route is a non-executing preview and has no sandbox
                 # argument; allow_frontier is its applicable safety guard.
@@ -385,7 +393,7 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                     ),
                 )
 
-                failover_started_at = datetime.now(UTC)
+                failover_started_at = evidence_started_at()
                 failover_started = time.monotonic()
                 dispatch = result_payload(
                     await client.call_tool(
@@ -450,7 +458,7 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                     ),
                 )
 
-                isolation_started_at = datetime.now(UTC)
+                isolation_started_at = evidence_started_at()
                 isolation_started = time.monotonic()
                 isolation = result_payload(
                     await client.call_tool(
@@ -500,7 +508,7 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                     ),
                 )
 
-                timeout_started_at = datetime.now(UTC)
+                timeout_started_at = evidence_started_at()
                 timeout_started = time.monotonic()
                 timed_out = result_payload(
                     await client.call_tool(
@@ -552,7 +560,7 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                     ),
                 )
 
-                cancellation_started_at = datetime.now(UTC)
+                cancellation_started_at = evidence_started_at()
                 cancellation_started = time.monotonic()
                 successes_before_cancel = await history_count(
                     client,
@@ -613,7 +621,7 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                     ),
                 )
 
-                broadcast_started_at = datetime.now(UTC)
+                broadcast_started_at = evidence_started_at()
                 broadcast_started = time.monotonic()
                 broadcast = result_payload(
                     await client.call_tool(
