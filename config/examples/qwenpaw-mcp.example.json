@@ -1,0 +1,11 @@
+{
+  "name": "vyane-local",
+  "transport": "stdio",
+  "command": "vyane",
+  "args": [
+    "--config",
+    "/absolute/path/to/vyane.toml",
+    "mcp"
+  ],
+  "env": {}
+}

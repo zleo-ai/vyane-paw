@@ -1,0 +1,11 @@
+# Synthetic example only. Confirm field names against the pinned vyane-rs build
+# during VP-01 before using this as an executable fixture.
+
+[integration]
+name = "vyane-paw-local"
+transport = "stdio"
+
+[policy]
+profile = "demo-safe"
+allow_broadcast = true
+allow_failover = true

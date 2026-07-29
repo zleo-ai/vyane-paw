@@ -1,0 +1,42 @@
+# Demo scenarios
+
+## 1. Best-target routing
+
+The user submits one task in QwenPaw. Vyane selects a target using declared
+capabilities and policy, returns the selected target class and result, and
+records sanitized decision evidence.
+
+Success measures:
+
+- completion rate;
+- routing decision validity;
+- median end-to-end latency;
+- operator interventions.
+
+## 2. Failure-aware dispatch
+
+The primary target fails with a deterministic synthetic error. Vyane applies an
+allowed fallback and returns a result without requiring the user to restart the
+conversation.
+
+Success measures:
+
+- fallback success rate;
+- recovery latency;
+- duplicate side effects;
+- clarity of the surfaced failure reason.
+
+## 3. Multi-model review
+
+QwenPaw asks Vyane to broadcast a bounded task to multiple targets and present a
+structured comparison or review result.
+
+Success measures:
+
+- number of independent valid responses;
+- disagreement surfaced to the user;
+- total latency and cost proxy;
+- trace completeness after sanitization.
+
+All demonstrations use synthetic inputs and non-sensitive repositories or
+fixtures.

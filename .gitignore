@@ -1,0 +1,88 @@
+# Operating systems and editors
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Local agent state
+.codex/
+.claude/
+.qwen/
+.qwenpaw/
+.agent-private/
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+credentials.*
+secrets.*
+auth.*
+
+# Local configuration overrides
+config/local/
+config/private/
+*.local.toml
+*.local.json
+*.local.yaml
+*.local.yml
+
+# Runtime state and evidence that has not been sanitized
+data/
+runtime/
+logs/
+tmp/
+temp/
+artifacts/
+recordings/
+screenshots/raw/
+docs/assets/raw/
+*.log
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.jsonl
+
+# Internal source material and office documents
+private/
+internal/
+source-materials/
+submission/private/
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Rust
+target/
+
+# Node
+node_modules/
+dist/
+coverage/
+
+# Build output
+build/
+out/

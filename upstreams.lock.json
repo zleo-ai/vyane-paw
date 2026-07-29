@@ -1,0 +1,19 @@
+{
+  "schema_version": "0.1.0",
+  "captured_at": "2026-07-29",
+  "upstreams": {
+    "qwenpaw": {
+      "repository": "https://github.com/agentscope-ai/QwenPaw",
+      "revision": "ebb5b24d0b2559af51d71a38547d88d384357a64"
+    },
+    "vyane_rs": {
+      "repository": "https://github.com/zleo-ai/vyane-rs",
+      "revision": "4848ec4f9d0b740fd8dc5f5586bc30111dc3d373"
+    },
+    "rmcp": {
+      "repository": "https://github.com/modelcontextprotocol/rust-sdk",
+      "version": "3.0.0",
+      "release": "https://github.com/modelcontextprotocol/rust-sdk/releases/tag/rmcp-v3.0.0"
+    }
+  }
+}
