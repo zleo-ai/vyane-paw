@@ -45,6 +45,8 @@ docker run --rm \
   --mount "type=bind,src=$runtime_root,dst=/runtime" \
   --env HOME=/runtime/home \
   --env CARGO_HOME=/runtime/cargo-home \
+  --env NO_PROXY=localhost,127.0.0.1,::1 \
+  --env no_proxy=localhost,127.0.0.1,::1 \
   --env RUSTUP_HOME=/usr/local/rustup \
   --env TMPDIR=/runtime/tmp \
   --env UV_CACHE_DIR=/runtime/uv-cache \

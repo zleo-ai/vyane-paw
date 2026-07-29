@@ -63,6 +63,14 @@ socket and no persisted checkout credential. The container sees a read-only
 `git archive` of tracked Vyane Paw files rather than the checkout or its ignored
 runtime data, plus one per-job temporary runtime directory read-write. A
 candidate job must not receive production secrets or mount other host data.
+Only credential-free public proxy variables may cross the boundary; host
+`NO_PROXY` values are not forwarded because they can reveal internal domains,
+and the container receives loopback-only bypasses instead. Network access is
+required to resolve and build the public candidate, while the fixed Rust
+toolchain is intentionally read-only: a new upstream toolchain requirement is a
+visible compatibility failure rather than an implicit runtime installation.
+System package versions are resolved when the disposable canary image is built;
+they are not part of the stable compatibility claim.
 
 ## Validation matrix
 
