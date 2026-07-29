@@ -37,9 +37,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--compatibility-lane",
         choices=("stable", "candidate"),
-        required=True,
+        default="stable",
     )
-    parser.add_argument("--vyane-revision", required=True)
+    parser.add_argument("--vyane-revision")
     parser.add_argument("--rmcp-version", required=True)
     parser.add_argument("--upstreams-lock", type=Path, required=True)
     parser.add_argument("--evidence", type=Path, required=True)

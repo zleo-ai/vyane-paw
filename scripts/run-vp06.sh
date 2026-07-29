@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(git rev-parse --show-toplevel)"
+repo_root="${VYANE_PAW_REPO_ROOT:-$(git rev-parse --show-toplevel)}"
 runtime_root="${VYANE_PAW_RUNTIME_DIR:-$repo_root/runtime}"
 evidence_path="$runtime_root/evidence/vp01-candidate.json"
 

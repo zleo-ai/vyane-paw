@@ -51,9 +51,18 @@ The candidate checkout and evidence path are isolated from the stable lane.
 Its CI job is visible but advisory: an upstream candidate failure must not
 rewrite the last proven stable claim. Promoting a candidate requires updating
 the stable lock and completing the required CI and independent review gates.
-The same canary also runs daily at 06:20 Asia/Shanghai and supports manual
-dispatch; that scheduled workflow fails visibly when current upstream `main`
-breaks the boundary.
+The same canary is scheduled for 06:20 Asia/Shanghai and supports manual
+dispatch; GitHub schedules are best-effort, while an executed scheduled run
+fails visibly when current upstream `main` breaks the boundary.
+
+Candidate source is same-owner but moving code and is therefore never executed
+directly on the persistent self-hosted runner. The runner builds a digest-pinned
+Rust/uv image from `compat/candidate.Dockerfile`, then runs the candidate build
+and smoke inside a read-only, capability-dropped container with no Docker
+socket and no persisted checkout credential. The container sees a read-only
+`git archive` of tracked Vyane Paw files rather than the checkout or its ignored
+runtime data, plus one per-job temporary runtime directory read-write. A
+candidate job must not receive production secrets or mount other host data.
 
 ## Validation matrix
 

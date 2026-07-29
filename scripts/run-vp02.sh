@@ -3,8 +3,8 @@ set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
 runtime_root="${VYANE_PAW_RUNTIME_DIR:-$repo_root/runtime}"
-qwenpaw_dir="$runtime_root/qwenpaw-src"
-vyane_dir="$runtime_root/vyane-rs-src"
+qwenpaw_dir="$runtime_root/qwenpaw-stable-src"
+vyane_dir="$runtime_root/vyane-rs-stable-src"
 evidence_dir="${VYANE_PAW_EVIDENCE_DIR:-$runtime_root/evidence/vp02}"
 
 "$repo_root/scripts/run-vp01.sh"

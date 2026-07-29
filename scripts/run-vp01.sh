@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(git rev-parse --show-toplevel)"
+repo_root="${VYANE_PAW_REPO_ROOT:-$(git rev-parse --show-toplevel)}"
 runtime_root="${VYANE_PAW_RUNTIME_DIR:-$repo_root/runtime}"
-qwenpaw_dir="$runtime_root/qwenpaw-src"
 compatibility_lane="${VYANE_PAW_COMPATIBILITY_LANE:-stable}"
 
 qwenpaw_revision="$(
@@ -24,11 +23,13 @@ declared_rmcp_version="$(
 
 case "$compatibility_lane" in
   stable)
+    qwenpaw_dir="$runtime_root/qwenpaw-stable-src"
     vyane_revision="$stable_vyane_revision"
-    vyane_dir="$runtime_root/vyane-rs-src"
+    vyane_dir="$runtime_root/vyane-rs-stable-src"
     default_evidence_path="$runtime_root/evidence/vp01-stable.json"
     ;;
   candidate)
+    qwenpaw_dir="$runtime_root/qwenpaw-candidate-src"
     vyane_revision="$(
       git ls-remote "$vyane_repository" refs/heads/main |
         awk 'NR == 1 { print $1 }'
@@ -137,6 +138,7 @@ jq -e \
   --arg revision "$vyane_revision" \
   '.result == "passed"
    and .metrics.discovered_tools == 9
+   and .metrics.server_process_reaped == 1
    and .upstream_revisions.compatibility_lane == $lane
    and .upstream_revisions.vyane_rs == $revision' \
   "$evidence_path" \
