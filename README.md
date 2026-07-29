@@ -38,11 +38,9 @@ Vyane implementation.
 
 ## Start today
 
-1. Complete `VP-01`: connect an unmodified QwenPaw MCP client to the pinned
-   `vyane-rs` stdio server.
-2. Capture a sanitized protocol transcript and machine-readable compatibility
-   result.
-3. Only after the smoke test passes, implement the three demo scenarios in
-   `VP-02`.
+1. Run the completed `VP-01` pinned stdio compatibility gate.
+2. Run the hermetic `VP-02` route, failover, and broadcast fixtures.
+3. Close the verified QwenPaw cancellation-propagation gap before claiming
+   server-side cancellation from the product integration.
 
 See [README.zh-CN.md](README.zh-CN.md) for the Chinese overview.

@@ -1,0 +1,21 @@
+{
+  "schema_version": "0.1.0",
+  "scenario": "route",
+  "sanitization_state": "sanitized",
+  "started_at": "2026-07-29T12:33:26.097328+00:00",
+  "duration_ms": 4,
+  "upstream_revisions": {
+    "qwenpaw": "ebb5b24d0b2559af51d71a38547d88d384357a64",
+    "vyane_rs": "4848ec4f9d0b740fd8dc5f5586bc30111dc3d373",
+    "rmcp": "3.0.0",
+    "python_mcp": "1.29.0"
+  },
+  "result": "passed",
+  "metrics": {
+    "routing_decision_valid": 1,
+    "operator_interventions": 0
+  },
+  "limitations": [
+    "deterministic synthetic routing fixture"
+  ]
+}

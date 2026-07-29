@@ -40,3 +40,15 @@ Success measures:
 
 All demonstrations use synthetic inputs and non-sensitive repositories or
 fixtures.
+
+## Automated fixture
+
+`scripts/run-vp02.sh` exercises all three flows through QwenPaw's pinned,
+unmodified stdio MCP client and local synthetic OpenAI-compatible endpoints.
+It records sanitized route, failover, and broadcast evidence without requiring
+provider credentials.
+
+The pinned QwenPaw client currently does not turn local coroutine cancellation
+into an MCP `notifications/cancelled` message. Timeout is enforced and recorded
+by Vyane, while local cancellation is reported as a known integration gap
+rather than a completed server-side cancellation.

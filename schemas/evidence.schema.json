@@ -99,6 +99,144 @@
           "metrics"
         ]
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "scenario": {
+            "const": "route"
+          }
+        },
+        "required": [
+          "scenario"
+        ]
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "required": [
+              "routing_decision_valid",
+              "operator_interventions"
+            ],
+            "properties": {
+              "routing_decision_valid": {
+                "const": 1
+              },
+              "operator_interventions": {
+                "const": 0
+              }
+            }
+          }
+        },
+        "required": [
+          "metrics"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scenario": {
+            "const": "failover"
+          }
+        },
+        "required": [
+          "scenario"
+        ]
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "required": [
+              "fallback_success",
+              "fallback_recovery_latency_ms",
+              "primary_attempts",
+              "fallback_attempts",
+              "duplicate_side_effects",
+              "isolated_successes",
+              "isolated_failures",
+              "timeout_bounded",
+              "cancellation_probe_completed",
+              "cancellation_propagated"
+            ],
+            "properties": {
+              "fallback_success": {
+                "const": 1
+              },
+              "fallback_recovery_latency_ms": {
+                "minimum": 0
+              },
+              "primary_attempts": {
+                "minimum": 1
+              },
+              "fallback_attempts": {
+                "const": 1
+              },
+              "duplicate_side_effects": {
+                "const": 0
+              },
+              "isolated_successes": {
+                "minimum": 1
+              },
+              "isolated_failures": {
+                "minimum": 1
+              },
+              "timeout_bounded": {
+                "const": 1
+              },
+              "cancellation_probe_completed": {
+                "const": 1
+              },
+              "cancellation_propagated": {
+                "enum": [
+                  0,
+                  1
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "metrics"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scenario": {
+            "const": "broadcast"
+          }
+        },
+        "required": [
+          "scenario"
+        ]
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "required": [
+              "independent_valid_responses",
+              "max_observed_concurrency",
+              "operator_interventions"
+            ],
+            "properties": {
+              "independent_valid_responses": {
+                "minimum": 2
+              },
+              "max_observed_concurrency": {
+                "minimum": 2
+              },
+              "operator_interventions": {
+                "const": 0
+              }
+            }
+          }
+        },
+        "required": [
+          "metrics"
+        ]
+      }
     }
   ]
 }

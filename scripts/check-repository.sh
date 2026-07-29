@@ -10,8 +10,8 @@ for file in upstreams.lock.json schemas/*.json config/examples/*.json evidence/*
   jq empty "$file"
 done
 
-uv run --project compat --locked ruff check compat/smoke.py
-uv run --project compat --locked ruff format --check compat/smoke.py
+uv run --project compat --locked ruff check compat/*.py
+uv run --project compat --locked ruff format --check compat/*.py
 uv run --project compat --locked check-jsonschema \
   --schemafile schemas/evidence.schema.json \
   evidence/*.json
