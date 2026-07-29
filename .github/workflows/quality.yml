@@ -2,6 +2,8 @@ name: quality
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 permissions:
@@ -11,7 +13,7 @@ jobs:
   repository:
     runs-on: [self-hosted, vyane-paw]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Validate repository
         run: ./scripts/check-repository.sh
       - name: Run VP-01 compatibility smoke
