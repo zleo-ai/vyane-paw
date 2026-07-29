@@ -68,9 +68,59 @@
       "items": {
         "type": "string"
       }
+    },
+    "publication_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewer_type",
+        "decision",
+        "reviewed_at",
+        "source_sha256"
+      ],
+      "properties": {
+        "reviewer_type": {
+          "const": "human"
+        },
+        "decision": {
+          "const": "approved"
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "sanitization_state": {
+            "const": "publishable"
+          }
+        },
+        "required": [
+          "sanitization_state"
+        ]
+      },
+      "then": {
+        "required": [
+          "publication_review"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "publication_review"
+          ]
+        }
+      }
+    },
     {
       "if": {
         "properties": {

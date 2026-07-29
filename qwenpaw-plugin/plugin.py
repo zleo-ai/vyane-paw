@@ -8,6 +8,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .core import PolicyError, load_runtime_policy, required_tool
+
 
 _PLUGIN_DIR = Path(__file__).parent
 _MODES = frozenset({"route", "dispatch", "failover", "review"})
@@ -146,13 +148,55 @@ def _assistant_message(text: str) -> Any:
     )
 
 
+def _apply_request_tool_boundary(ctx: Any, tool: str) -> None:
+    """Expose exactly one authorized tool when QwenPaw builds this turn."""
+    request = getattr(ctx, "request", None)
+    if request is None:
+        raise PolicyError("QwenPaw 请求上下文不可用。")
+    current = getattr(request, "request_context", None)
+    if current is None:
+        current = {}
+        setattr(request, "request_context", current)
+    if not isinstance(current, dict):
+        raise PolicyError("QwenPaw 请求上下文格式无效。")
+    current["subagent_allowed_tools"] = [tool]
+
+
+def _result_middleware_factory(ctx: Any, _agent_config: Any) -> Any | None:
+    request = getattr(ctx, "request", None)
+    request_context = getattr(request, "request_context", None)
+    if not isinstance(request_context, dict):
+        return None
+    contract = request_context.get("vyane_paw_result_contract")
+    if not isinstance(contract, dict):
+        return None
+    from .middleware import VyaneResultContractMiddleware
+
+    return VyaneResultContractMiddleware(contract)
+
+
 async def _vyane_command(ctx: Any, args: str) -> Any | None:
     try:
         plan = parse_command(args)
     except ValueError as exc:
         return _assistant_message(f"**Vyane Paw 命令未执行**\n\n{exc}")
+    try:
+        policy = load_runtime_policy()
+        policy.authorize(plan)
+        tool = required_tool(plan)
+        _apply_request_tool_boundary(ctx, tool)
+        ctx.request.request_context["vyane_paw_result_contract"] = {
+            "tool": tool,
+            "mode": plan["mode"],
+            "policy_profile": policy.profile,
+        }
+    except PolicyError as exc:
+        return _assistant_message(f"**Vyane Paw 策略拒绝**\n\n{exc}")
     ctx.inject_context(
-        build_context(plan),
+        build_context(plan)
+        + "\n"
+        + f"Enforced policy profile: {policy.profile}\n"
+        + f"Policy schema version: {policy.schema_version}",
         priority=20,
         source="plugin:vyane-paw",
     )
@@ -175,6 +219,7 @@ class VyanePawPlugin:
             enabled_by_default=True,
             channels=["all"],
         )
+        api.register_middleware(_result_middleware_factory, priority=40)
 
 
 plugin = VyanePawPlugin()

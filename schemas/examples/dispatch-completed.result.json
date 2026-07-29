@@ -1,0 +1,17 @@
+{
+  "schema_version": "0.1.0",
+  "tool": "vyane_dispatch",
+  "mode": "dispatch",
+  "policy_profile": "demo-safe",
+  "operation_status": "completed",
+  "outcome": "success",
+  "detail_state": "full",
+  "retry_guidance": "do_not_retry",
+  "data": {
+    "operation_status": "completed",
+    "record": {
+      "status": "success"
+    },
+    "detail_omitted": false
+  }
+}

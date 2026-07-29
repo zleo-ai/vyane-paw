@@ -1,0 +1,13 @@
+{
+  "schema_version": "0.1.0",
+  "tool": "vyane_dispatch",
+  "mode": "dispatch",
+  "policy_profile": "demo-safe",
+  "operation_status": "rejected",
+  "outcome": "failure",
+  "detail_state": "not_applicable",
+  "retry_guidance": "do_not_retry",
+  "error": {
+    "code": "invalid_argument"
+  }
+}

@@ -9,7 +9,9 @@ import asyncio
 import importlib.metadata
 import importlib.util
 import json
+import os
 import sys
+import tempfile
 import time
 import types
 from datetime import UTC, datetime
@@ -23,10 +25,18 @@ PLUGIN_DIR = ROOT / "qwenpaw-plugin"
 
 def load_plugin_module() -> Any:
     path = PLUGIN_DIR / "plugin.py"
-    spec = importlib.util.spec_from_file_location("vyane_paw_plugin", path)
+    name = "vyane_paw_plugin"
+    spec = importlib.util.spec_from_file_location(
+        name,
+        path,
+        submodule_search_locations=[str(PLUGIN_DIR)],
+    )
     if spec is None or spec.loader is None:
         raise AssertionError("plugin module could not be loaded")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    module.__package__ = name
+    module.__path__ = [str(PLUGIN_DIR)]
     spec.loader.exec_module(module)
     return module
 
@@ -72,7 +82,8 @@ def assert_pinned_qwenpaw_api(architecture_path: Path) -> int:
     hooks_path = qwenpaw_dir / "runtime" / "hooks.py"
     runtime_path = qwenpaw_dir / "runtime" / "runtime.py"
     builtin_path = qwenpaw_dir / "runtime" / "builtin_commands.py"
-    for path in (api_path, hooks_path, runtime_path, builtin_path):
+    builder_path = qwenpaw_dir / "runtime" / "builder.py"
+    for path in (api_path, hooks_path, runtime_path, builtin_path, builder_path):
         if not path.is_file():
             raise AssertionError(f"pinned QwenPaw source is missing: {path.name}")
 
@@ -92,6 +103,10 @@ def assert_pinned_qwenpaw_api(architecture_path: Path) -> int:
     if not {"skills_dir", "enabled_by_default", "channels"}.issubset(skills):
         raise AssertionError("pinned Skill-provider API is incompatible")
     verified += 1
+    middleware = method_parameters(api_path, "PluginApi", "register_middleware")
+    if not {"middleware_factory", "priority"}.issubset(middleware):
+        raise AssertionError("pinned middleware API is incompatible")
+    verified += 1
     injection = method_parameters(hooks_path, "HookContext", "inject_context")
     if not {"content", "priority", "source"}.issubset(injection):
         raise AssertionError("pinned context-injection API is incompatible")
@@ -108,6 +123,17 @@ def assert_pinned_qwenpaw_api(architecture_path: Path) -> int:
     if 'TextBlock(type="text", text=text)' not in builtin_source:
         raise AssertionError("pinned QwenPaw message construction drifted")
     verified += 1
+    builder_source = builder_path.read_text(encoding="utf-8")
+    if 'getattr(request, "request_context", None)' not in builder_source:
+        raise AssertionError("pinned request-context propagation drifted")
+    verified += 1
+    if (
+        'get("subagent_allowed_tools")' not in builder_source
+        or "return [t for t in items if cls._tool_name(t) in allow]"
+        not in builder_source
+    ):
+        raise AssertionError("pinned request tool-whitelist contract drifted")
+    verified += 1
     return verified
 
 
@@ -115,6 +141,7 @@ class FakeApi:
     def __init__(self) -> None:
         self.command: tuple[Any, ...] | None = None
         self.skill_provider: tuple[Any, ...] | None = None
+        self.middleware: tuple[Any, ...] | None = None
 
     def register_slash_command(self, *args: Any, **kwargs: Any) -> None:
         self.command = (args, kwargs)
@@ -122,13 +149,89 @@ class FakeApi:
     def register_skill_provider(self, *args: Any, **kwargs: Any) -> None:
         self.skill_provider = (args, kwargs)
 
+    def register_middleware(self, *args: Any, **kwargs: Any) -> None:
+        self.middleware = (args, kwargs)
+
 
 class FakeContext:
     def __init__(self) -> None:
         self.injections: list[tuple[str, dict[str, Any]]] = []
+        self.request = types.SimpleNamespace(request_context=None)
 
     def inject_context(self, content: str, **kwargs: Any) -> None:
         self.injections.append((content, kwargs))
+
+
+class FakeTextBlock(dict):
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+
+
+class FakeMsg(dict):
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+
+
+class FakeMiddlewareBase:
+    pass
+
+
+class FakeToolResponse:
+    def __init__(
+        self, content: list[Any], metadata: dict[str, Any] | None = None
+    ) -> None:
+        self.content = content
+        self.metadata = metadata
+
+
+def install_agentscope_message_fixture() -> dict[str, Any]:
+    previous = {
+        name: sys.modules.get(name) for name in ("agentscope", "agentscope.message")
+    }
+    package = types.ModuleType("agentscope")
+    package.__path__ = []
+    message = types.ModuleType("agentscope.message")
+    message.Msg = FakeMsg
+    message.TextBlock = FakeTextBlock
+    package.message = message
+    sys.modules["agentscope"] = package
+    sys.modules["agentscope.message"] = message
+    return previous
+
+
+def install_agentscope_runtime_fixture() -> dict[str, Any]:
+    names = (
+        "agentscope",
+        "agentscope.message",
+        "agentscope.middleware",
+        "agentscope.tool",
+    )
+    previous = {name: sys.modules.get(name) for name in names}
+    package = types.ModuleType("agentscope")
+    package.__path__ = []
+    message = types.ModuleType("agentscope.message")
+    message.Msg = FakeMsg
+    message.TextBlock = FakeTextBlock
+    middleware = types.ModuleType("agentscope.middleware")
+    middleware.MiddlewareBase = FakeMiddlewareBase
+    tool = types.ModuleType("agentscope.tool")
+    tool.ToolResponse = FakeToolResponse
+    package.message = message
+    package.middleware = middleware
+    package.tool = tool
+    sys.modules["agentscope"] = package
+    sys.modules["agentscope.message"] = message
+    sys.modules["agentscope.middleware"] = middleware
+    sys.modules["agentscope.tool"] = tool
+    return previous
+
+
+def restore_agentscope_message_fixture(previous: dict[str, Any]) -> None:
+    for name, module in previous.items():
+        if module is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = module
 
 
 def assert_manifest(qwenpaw_architecture: Path | None) -> int:
@@ -160,8 +263,8 @@ def assert_manifest(qwenpaw_architecture: Path | None) -> int:
 async def assert_command_contract(module: Any) -> None:
     api = FakeApi()
     module.plugin.register(api)
-    if api.command is None or api.skill_provider is None:
-        raise AssertionError("plugin did not register both entry points")
+    if api.command is None or api.skill_provider is None or api.middleware is None:
+        raise AssertionError("plugin did not register every entry point")
     command_args, command_kwargs = api.command
     if command_args[0] != "vyane":
         raise AssertionError("unexpected slash command")
@@ -172,72 +275,139 @@ async def assert_command_contract(module: Any) -> None:
         raise AssertionError("unexpected Skill source")
     if not skill_kwargs["enabled_by_default"]:
         raise AssertionError("Vyane Paw Skill must be enabled by default")
+    middleware_args, middleware_kwargs = api.middleware
+    if middleware_args[0] is not module._result_middleware_factory:
+        raise AssertionError("unexpected result middleware factory")
+    if middleware_kwargs != {"priority": 40}:
+        raise AssertionError("unexpected result middleware priority")
 
     handler = command_args[1]
-    cases = {
-        "route ROUTE_TASK_SENTINEL": ("route", None),
-        "dispatch DISPATCH_TASK_SENTINEL": ("dispatch", None),
-        "failover resilient -- FAILOVER_TASK_SENTINEL": (
-            "failover",
-            "resilient",
-        ),
-        "review reviewer-a,reviewer-b -- REVIEW_TASK_SENTINEL": (
-            "review",
-            "reviewer-a,reviewer-b",
-        ),
+    policy = {
+        "schema_version": "0.1.0",
+        "profile": "contract-test",
+        "allowed_tools": [
+            "vyane_route",
+            "vyane_dispatch",
+            "vyane_broadcast",
+        ],
+        "allow_failover": True,
+        "allow_broadcast": True,
+        "max_parallel_targets": 2,
+        "allowed_targets": ["resilient", "reviewer-a", "reviewer-b"],
     }
-    for raw, (mode, selector) in cases.items():
-        ctx = FakeContext()
-        response = await handler(ctx, raw)
-        if response is not None or len(ctx.injections) != 1:
-            raise AssertionError(f"{mode} did not inject exactly one contract")
-        content, metadata = ctx.injections[0]
-        if f'"mode":"{mode}"' not in content:
-            raise AssertionError(f"{mode} was not preserved")
-        if selector and selector in content:
-            raise AssertionError(f"{mode} selector entered system context")
-        if "TASK_SENTINEL" in content:
-            raise AssertionError("user task was promoted into system context")
-        expected_tool = {
-            "route": "vyane_route",
-            "dispatch": "vyane_dispatch",
-            "failover": "vyane_dispatch",
-            "review": "vyane_broadcast",
-        }[mode]
-        if f"Required MCP tool: {expected_tool}\n" not in content:
-            raise AssertionError(f"{mode} did not bind the expected MCP tool")
-        arguments_line = next(
-            (
-                line
-                for line in content.splitlines()
-                if line.startswith("Fixed MCP arguments: ")
-            ),
-            None,
-        )
-        if arguments_line is None:
-            raise AssertionError(f"{mode} has no fixed MCP argument contract")
-        fixed_arguments = json.loads(
-            arguments_line.removeprefix("Fixed MCP arguments: "),
-        )
-        expected_arguments = {
-            "route": {"allow_frontier": False},
-            "dispatch": {
-                "target": "auto",
-                "allow_frontier": False,
-                "sandbox": "read_only",
-                "timeout_secs": 120,
-            },
-            "failover": {
-                "allow_frontier": False,
-                "sandbox": "read_only",
-                "timeout_secs": 120,
-            },
-            "review": {"sandbox": "read_only", "timeout_secs": 120},
-        }[mode]
-        if fixed_arguments != expected_arguments:
-            raise AssertionError(f"{mode} fixed MCP arguments drifted")
-        if metadata != {"priority": 20, "source": "plugin:vyane-paw"}:
-            raise AssertionError("unexpected context injection metadata")
+    with tempfile.TemporaryDirectory() as tmp:
+        policy_path = Path(tmp) / "policy.json"
+        policy_path.write_text(json.dumps(policy), encoding="utf-8")
+        previous_policy = os.environ.get("VYANE_PAW_POLICY")
+        os.environ["VYANE_PAW_POLICY"] = str(policy_path)
+        try:
+            cases = {
+                "route ROUTE_TASK_SENTINEL": ("route", None),
+                "dispatch DISPATCH_TASK_SENTINEL": ("dispatch", None),
+                "failover resilient -- FAILOVER_TASK_SENTINEL": (
+                    "failover",
+                    "resilient",
+                ),
+                "review reviewer-a,reviewer-b -- REVIEW_TASK_SENTINEL": (
+                    "review",
+                    "reviewer-a,reviewer-b",
+                ),
+            }
+            for raw, (mode, selector) in cases.items():
+                ctx = FakeContext()
+                response = await handler(ctx, raw)
+                if response is not None or len(ctx.injections) != 1:
+                    raise AssertionError(
+                        f"{mode} did not inject exactly one contract",
+                    )
+                content, metadata = ctx.injections[0]
+                if f'"mode":"{mode}"' not in content:
+                    raise AssertionError(f"{mode} was not preserved")
+                if selector and selector in content:
+                    raise AssertionError(
+                        f"{mode} selector entered system context",
+                    )
+                if "TASK_SENTINEL" in content:
+                    raise AssertionError(
+                        "user task was promoted into system context",
+                    )
+                expected_tool = {
+                    "route": "vyane_route",
+                    "dispatch": "vyane_dispatch",
+                    "failover": "vyane_dispatch",
+                    "review": "vyane_broadcast",
+                }[mode]
+                if f"Required MCP tool: {expected_tool}\n" not in content:
+                    raise AssertionError(
+                        f"{mode} did not bind the expected MCP tool",
+                    )
+                if ctx.request.request_context != {
+                    "subagent_allowed_tools": [expected_tool],
+                    "vyane_paw_result_contract": {
+                        "tool": expected_tool,
+                        "mode": mode,
+                        "policy_profile": "contract-test",
+                    },
+                }:
+                    raise AssertionError(
+                        f"{mode} did not enforce its request tool boundary",
+                    )
+                if "Enforced policy profile: contract-test" not in content:
+                    raise AssertionError("policy identity was not preserved")
+                arguments_line = next(
+                    (
+                        line
+                        for line in content.splitlines()
+                        if line.startswith("Fixed MCP arguments: ")
+                    ),
+                    None,
+                )
+                if arguments_line is None:
+                    raise AssertionError(
+                        f"{mode} has no fixed MCP argument contract",
+                    )
+                fixed_arguments = json.loads(
+                    arguments_line.removeprefix("Fixed MCP arguments: "),
+                )
+                expected_arguments = {
+                    "route": {"allow_frontier": False},
+                    "dispatch": {
+                        "target": "auto",
+                        "allow_frontier": False,
+                        "sandbox": "read_only",
+                        "timeout_secs": 120,
+                    },
+                    "failover": {
+                        "allow_frontier": False,
+                        "sandbox": "read_only",
+                        "timeout_secs": 120,
+                    },
+                    "review": {
+                        "sandbox": "read_only",
+                        "timeout_secs": 120,
+                    },
+                }[mode]
+                if fixed_arguments != expected_arguments:
+                    raise AssertionError(
+                        f"{mode} fixed MCP arguments drifted",
+                    )
+                if metadata != {
+                    "priority": 20,
+                    "source": "plugin:vyane-paw",
+                }:
+                    raise AssertionError(
+                        "unexpected context injection metadata",
+                    )
+        finally:
+            if previous_policy is None:
+                os.environ.pop("VYANE_PAW_POLICY", None)
+            else:
+                os.environ["VYANE_PAW_POLICY"] = previous_policy
+
+    await assert_policy_enforcement(module, handler)
+    assert_policy_validation(module)
+    assert_result_contract(module)
+    await assert_result_middleware(module)
 
     invalid = (
         "",
@@ -255,6 +425,283 @@ async def assert_command_contract(module: Any) -> None:
         except ValueError:
             continue
         raise AssertionError(f"invalid command was accepted: {raw!r}")
+
+
+def assert_result_contract(module: Any) -> None:
+    contract = importlib.import_module(f"{module.__name__}.result_contract")
+    cases = [
+        (
+            "vyane_route",
+            "route",
+            {"profile": "safe", "provider": "synthetic", "model": "small"},
+            ("completed", "success", "full"),
+        ),
+        (
+            "vyane_dispatch",
+            "dispatch",
+            {
+                "operation_status": "completed",
+                "record": {"status": "success"},
+                "detail_omitted": False,
+            },
+            ("completed", "success", "full"),
+        ),
+        (
+            "vyane_dispatch",
+            "failover",
+            {
+                "operation_status": "completed",
+                "receipt": {"run_status": "failed"},
+                "detail_omitted": True,
+            },
+            ("completed", "failure", "receipt"),
+        ),
+        (
+            "vyane_broadcast",
+            "review",
+            {
+                "operation_status": "completed",
+                "items": [
+                    {"record": {"status": "success"}},
+                    {"error": {"code": "unavailable"}},
+                ],
+                "detail_omitted": False,
+            },
+            ("completed", "partial", "full"),
+        ),
+    ]
+    for tool, mode, payload, expected in cases:
+        normalized = contract.normalize_tool_payload(
+            tool=tool,
+            mode=mode,
+            policy_profile="contract-test",
+            payload=payload,
+        )
+        actual = (
+            normalized["operation_status"],
+            normalized["outcome"],
+            normalized["detail_state"],
+        )
+        if actual != expected:
+            raise AssertionError(f"{mode} result normalization drifted")
+        if normalized["retry_guidance"] != "do_not_retry":
+            raise AssertionError(f"{mode} result became retryable")
+
+    rejected = contract.normalize_tool_payload(
+        tool="vyane_dispatch",
+        mode="dispatch",
+        policy_profile="contract-test",
+        payload={
+            "status": "error",
+            "error": {
+                "code": "invalid_argument",
+                "message": "bounded upstream message",
+            },
+        },
+    )
+    if rejected["operation_status"] != "rejected":
+        raise AssertionError("safe Vyane rejection was not normalized")
+    if rejected["error"] != {"code": "invalid_argument"}:
+        raise AssertionError("raw upstream error crossed the result contract")
+
+    malformed = contract.normalize_tool_payload(
+        tool="vyane_dispatch",
+        mode="dispatch",
+        policy_profile="contract-test",
+        payload={"operation_status": "running"},
+    )
+    if malformed["operation_status"] != "protocol_failure":
+        raise AssertionError("unexpected operation status did not fail closed")
+
+    transport = contract.normalize_tool_payload(
+        tool="vyane_dispatch",
+        mode="dispatch",
+        policy_profile="contract-test",
+        payload={
+            "ok": False,
+            "type": "driver_unavailable",
+            "message": "raw driver detail",
+        },
+    )
+    if transport["operation_status"] != "transport_failure":
+        raise AssertionError("driver failure was not normalized")
+    if transport["error"] != {"code": "driver_unavailable"}:
+        raise AssertionError("driver failure code was not bounded")
+    if "message" in transport:
+        raise AssertionError("raw driver error crossed the result contract")
+
+
+def assert_policy_validation(module: Any) -> None:
+    core = importlib.import_module(f"{module.__name__}.core")
+    invalid = [
+        {
+            "schema_version": "0.1.0",
+            "profile": "bad-failover",
+            "allowed_tools": ["vyane_route"],
+            "allow_failover": True,
+            "allowed_targets": ["resilient"],
+        },
+        {
+            "schema_version": "0.1.0",
+            "profile": "unbounded-targets",
+            "allowed_tools": ["vyane_dispatch"],
+            "allow_failover": True,
+        },
+        {
+            "schema_version": "0.1.0",
+            "profile": "bad-broadcast",
+            "allowed_tools": ["vyane_broadcast"],
+            "allow_broadcast": True,
+            "max_parallel_targets": 1,
+            "allowed_targets": ["reviewer-a", "reviewer-b"],
+        },
+    ]
+    for payload in invalid:
+        try:
+            core.RuntimePolicy.from_mapping(payload)
+        except core.PolicyError:
+            continue
+        raise AssertionError("internally inconsistent policy was accepted")
+
+
+async def assert_result_middleware(module: Any) -> None:
+    fixture = install_agentscope_runtime_fixture()
+    try:
+        ctx = FakeContext()
+        ctx.request.request_context = {
+            "vyane_paw_result_contract": {
+                "tool": "vyane_dispatch",
+                "mode": "dispatch",
+                "policy_profile": "contract-test",
+            },
+        }
+        middleware = module._result_middleware_factory(ctx, None)
+        if middleware is None:
+            raise AssertionError("result middleware factory returned None")
+        response = FakeToolResponse(
+            [
+                FakeTextBlock(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "operation_status": "completed",
+                            "record": {"status": "success"},
+                            "detail_omitted": False,
+                        },
+                    ),
+                ),
+            ],
+            {"existing": "preserved"},
+        )
+
+        async def next_handler():
+            yield response
+
+        tool_call = types.SimpleNamespace(name="vyane_dispatch")
+        events = [
+            event
+            async for event in middleware.on_acting(
+                None,
+                {"tool_call": tool_call},
+                next_handler,
+            )
+        ]
+        if events != [response] or len(response.content) != 1:
+            raise AssertionError("result middleware changed event cardinality")
+        normalized = json.loads(response.content[0]["text"])
+        if normalized["operation_status"] != "completed":
+            raise AssertionError("result middleware did not normalize payload")
+        if response.metadata != {
+            "existing": "preserved",
+            "vyane_paw_result_schema": "0.1.0",
+            "vyane_paw_operation_status": "completed",
+        }:
+            raise AssertionError("result middleware metadata drifted")
+    finally:
+        restore_agentscope_message_fixture(fixture)
+
+
+async def assert_policy_enforcement(module: Any, handler: Any) -> None:
+    fixture = install_agentscope_message_fixture()
+    try:
+        os.environ.pop("VYANE_PAW_POLICY", None)
+        default_route = FakeContext()
+        if await handler(default_route, "route task") is not None:
+            raise AssertionError("default policy denied route")
+        default_failover = FakeContext()
+        denied = await handler(default_failover, "failover resilient -- task")
+        if (
+            denied is None
+            or default_failover.injections
+            or default_failover.request.request_context is not None
+        ):
+            raise AssertionError("default policy did not deny failover")
+
+        restrictive = {
+            "schema_version": "0.1.0",
+            "profile": "restricted",
+            "allowed_tools": ["vyane_broadcast"],
+            "allow_broadcast": True,
+            "max_parallel_targets": 2,
+            "allowed_targets": ["reviewer-a", "reviewer-b"],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            policy_path = Path(tmp) / "policy.json"
+            policy_path.write_text(json.dumps(restrictive), encoding="utf-8")
+            os.environ["VYANE_PAW_POLICY"] = str(policy_path)
+            try:
+                denied_route = FakeContext()
+                response = await handler(denied_route, "route task")
+                if (
+                    response is None
+                    or denied_route.injections
+                    or denied_route.request.request_context is not None
+                ):
+                    raise AssertionError("tool policy did not deny route")
+
+                too_many = FakeContext()
+                response = await handler(
+                    too_many,
+                    "review reviewer-a,reviewer-b,reviewer-c -- task",
+                )
+                if (
+                    response is None
+                    or too_many.injections
+                    or too_many.request.request_context is not None
+                ):
+                    raise AssertionError(
+                        "parallelism policy did not fail closed",
+                    )
+
+                unknown_target = FakeContext()
+                response = await handler(
+                    unknown_target,
+                    "review reviewer-a,reviewer-c -- task",
+                )
+                if (
+                    response is None
+                    or unknown_target.injections
+                    or unknown_target.request.request_context is not None
+                ):
+                    raise AssertionError(
+                        "target policy did not fail closed",
+                    )
+
+                policy_path.write_text("{invalid", encoding="utf-8")
+                invalid_policy = FakeContext()
+                response = await handler(invalid_policy, "route task")
+                if (
+                    response is None
+                    or invalid_policy.injections
+                    or invalid_policy.request.request_context is not None
+                ):
+                    raise AssertionError(
+                        "invalid policy did not fail closed",
+                    )
+            finally:
+                os.environ.pop("VYANE_PAW_POLICY", None)
+    finally:
+        restore_agentscope_message_fixture(fixture)
 
 
 def assert_launcher() -> None:
@@ -325,6 +772,10 @@ def main() -> None:
                 "validated_product_modes": 4,
                 "allowlisted_mcp_tools": allowlisted_tools,
                 "pinned_runtime_contracts": runtime_contracts,
+                "request_scoped_tool_boundaries": 4,
+                "enforced_policy_denials": 5,
+                "normalized_result_cases": 7,
+                "result_middleware_rewrites": 1,
                 "fixed_private_paths": 0,
             },
             "limitations": [

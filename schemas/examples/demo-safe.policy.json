@@ -3,9 +3,15 @@
   "profile": "demo-safe",
   "allowed_tools": [
     "vyane_route",
-    "vyane_sessions"
+    "vyane_dispatch",
+    "vyane_broadcast"
   ],
-  "allow_failover": false,
-  "allow_broadcast": false,
-  "max_parallel_targets": 1
+  "allow_failover": true,
+  "allow_broadcast": true,
+  "max_parallel_targets": 2,
+  "allowed_targets": [
+    "resilient",
+    "reviewer-a",
+    "reviewer-b"
+  ]
 }

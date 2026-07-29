@@ -15,14 +15,18 @@
     },
     "profile": {
       "type": "string",
-      "minLength": 1
+      "pattern": "^[A-Za-z0-9_.-]{1,128}$"
     },
     "allowed_tools": {
       "type": "array",
+      "minItems": 1,
       "uniqueItems": true,
       "items": {
-        "type": "string",
-        "minLength": 1
+        "enum": [
+          "vyane_route",
+          "vyane_dispatch",
+          "vyane_broadcast"
+        ]
       }
     },
     "allow_failover": {
@@ -36,7 +40,75 @@
     "max_parallel_targets": {
       "type": "integer",
       "minimum": 1,
-      "maximum": 8
+      "maximum": 4
+    },
+    "allowed_targets": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+      }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "allow_failover": {
+            "const": true
+          }
+        },
+        "required": [
+          "allow_failover"
+        ]
+      },
+      "then": {
+        "properties": {
+          "allowed_tools": {
+            "contains": {
+              "const": "vyane_dispatch"
+            }
+          },
+          "allowed_targets": {
+            "minItems": 1
+          }
+        },
+        "required": [
+          "allowed_targets"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "allow_broadcast": {
+            "const": true
+          }
+        },
+        "required": [
+          "allow_broadcast"
+        ]
+      },
+      "then": {
+        "properties": {
+          "allowed_tools": {
+            "contains": {
+              "const": "vyane_broadcast"
+            }
+          },
+          "allowed_targets": {
+            "minItems": 1
+          },
+          "max_parallel_targets": {
+            "minimum": 2
+          }
+        },
+        "required": [
+          "allowed_targets",
+          "max_parallel_targets"
+        ]
+      }
+    }
+  ]
 }

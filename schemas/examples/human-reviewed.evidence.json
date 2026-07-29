@@ -1,0 +1,16 @@
+{
+  "schema_version": "0.1.0",
+  "scenario": "product_entry",
+  "sanitization_state": "publishable",
+  "started_at": "2026-07-29T00:00:00Z",
+  "result": "passed",
+  "publication_review": {
+    "reviewer_type": "human",
+    "decision": "approved",
+    "reviewed_at": "2026-07-29T00:01:00Z",
+    "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "limitations": [
+    "synthetic contract fixture"
+  ]
+}
