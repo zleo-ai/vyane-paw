@@ -13,6 +13,7 @@ import os
 import sys
 import tempfile
 import time
+import tomllib
 import types
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
@@ -111,7 +112,19 @@ def assert_pinned_qwenpaw_api(architecture_path: Path) -> int:
     runtime_path = qwenpaw_dir / "runtime" / "runtime.py"
     builtin_path = qwenpaw_dir / "runtime" / "builtin_commands.py"
     builder_path = qwenpaw_dir / "runtime" / "builder.py"
-    for path in (api_path, hooks_path, runtime_path, builtin_path, builder_path):
+    manager_path = qwenpaw_dir / "drivers" / "manager.py"
+    capabilities_path = qwenpaw_dir / "drivers" / "capabilities.py"
+    workspace_path = qwenpaw_dir / "app" / "workspace" / "workspace.py"
+    for path in (
+        api_path,
+        hooks_path,
+        runtime_path,
+        builtin_path,
+        builder_path,
+        manager_path,
+        capabilities_path,
+        workspace_path,
+    ):
         if not path.is_file():
             raise AssertionError(f"pinned QwenPaw source is missing: {path.name}")
 
@@ -162,6 +175,25 @@ def assert_pinned_qwenpaw_api(architecture_path: Path) -> int:
     ):
         raise AssertionError("pinned request tool-whitelist contract drifted")
     verified += 1
+    invoke = method_parameters(
+        manager_path,
+        "DriverManager",
+        "invoke_capability",
+    )
+    if "invocation" not in invoke:
+        raise AssertionError("pinned DriverManager invocation API drifted")
+    verified += 1
+    capabilities_source = capabilities_path.read_text(encoding="utf-8")
+    if (
+        "class DriverInvocation:" not in capabilities_source
+        or "def format_capability_id(" not in capabilities_source
+    ):
+        raise AssertionError("pinned Driver capability contract drifted")
+    verified += 1
+    workspace_source = workspace_path.read_text(encoding="utf-8")
+    if "def driver_manager(self):" not in workspace_source:
+        raise AssertionError("pinned workspace DriverManager access drifted")
+    verified += 1
     return verified
 
 
@@ -182,9 +214,10 @@ class FakeApi:
 
 
 class FakeContext:
-    def __init__(self) -> None:
+    def __init__(self, driver_manager: Any = None) -> None:
         self.injections: list[tuple[str, dict[str, Any]]] = []
         self.request = types.SimpleNamespace(request_context=None)
+        self.workspace = types.SimpleNamespace(driver_manager=driver_manager)
 
     def inject_context(self, content: str, **kwargs: Any) -> None:
         self.injections.append((content, kwargs))
@@ -213,6 +246,72 @@ def assert_bounded_denial(response: Any, forbidden: Iterable[str]) -> None:
     leaked = [value for value in forbidden if value and value in text]
     if leaked:
         raise AssertionError("policy denial exposed deployment-owned input")
+
+
+def install_fake_driver_capabilities() -> None:
+    qwenpaw = sys.modules.setdefault("qwenpaw", types.ModuleType("qwenpaw"))
+    if not hasattr(qwenpaw, "__path__"):
+        qwenpaw.__path__ = []
+    drivers = sys.modules.setdefault(
+        "qwenpaw.drivers",
+        types.ModuleType("qwenpaw.drivers"),
+    )
+    if not hasattr(drivers, "__path__"):
+        drivers.__path__ = []
+    capabilities = types.ModuleType("qwenpaw.drivers.capabilities")
+
+    class DriverInvocation:
+        def __init__(
+            self,
+            *,
+            capability_id: str,
+            payload: dict[str, Any],
+            request_context: dict[str, str],
+        ) -> None:
+            self.capability_id = capability_id
+            self.payload = payload
+            self.request_context = request_context
+
+    def format_capability_id(
+        protocol: str,
+        driver_name: str,
+        kind: str,
+        action: str,
+        name: str,
+    ) -> str:
+        return f"driver://{protocol}/{driver_name}/{kind}s/{name}#{action}"
+
+    capabilities.DriverInvocation = DriverInvocation
+    capabilities.format_capability_id = format_capability_id
+    sys.modules["qwenpaw.drivers.capabilities"] = capabilities
+
+
+class FakeDriverManager:
+    def __init__(self) -> None:
+        self.invocations: list[Any] = []
+
+    async def invoke_capability(self, invocation: Any) -> Any:
+        self.invocations.append(invocation)
+        tool = invocation.capability_id.split("/")[-1].split("#", 1)[0]
+        caller_id = invocation.payload["caller_id"]
+        state = {
+            "vyane_workflow_submit": "queued",
+            "vyane_workflow_status": "running",
+            "vyane_workflow_cancel": "cancelling",
+        }[tool]
+        return types.SimpleNamespace(
+            ok=True,
+            value=types.SimpleNamespace(
+                content=[
+                    {
+                        "text": json.dumps(
+                            {"caller_id": caller_id, "state": state},
+                        ),
+                    },
+                ],
+            ),
+            error_type="",
+        )
 
 
 def assert_manifest(qwenpaw_architecture: Path | None) -> int:
@@ -271,9 +370,13 @@ async def assert_command_contract(module: Any) -> dict[str, int]:
             "vyane_route",
             "vyane_dispatch",
             "vyane_broadcast",
+            "vyane_workflow_submit",
+            "vyane_workflow_status",
+            "vyane_workflow_cancel",
         ],
         "allow_failover": True,
         "allow_broadcast": True,
+        "allow_durable_workflows": True,
         "max_parallel_targets": 2,
         "allowed_targets": ["resilient", "reviewer-a", "reviewer-b"],
     }
@@ -388,6 +491,10 @@ async def assert_command_contract(module: Any) -> dict[str, int]:
                         f"{mode} fixed MCP arguments drifted",
                     )
                 request_scoped_tool_boundaries += 1
+            durable_workflow_commands = await assert_workflow_commands(
+                module,
+                handler,
+            )
         finally:
             if previous_policy is None:
                 os.environ.pop("VYANE_PAW_POLICY", None)
@@ -408,6 +515,12 @@ async def assert_command_contract(module: Any) -> dict[str, int]:
         "review a,bad target -- task",
         "failover a,b -- task",
         "failover bad/target -- task",
+        "workflow-submit a,b -- task",
+        "workflow-submit bad/target -- task",
+        "workflow-submit resilient task",
+        "workflow-status not-a-uuid",
+        "workflow-status 0198a140-4d31-7dd4-8bcc-832b9a48cf34 extra",
+        "workflow-cancel 0198A140-4D31-7DD4-8BCC-832B9A48CF34",
     )
     for raw in invalid:
         try:
@@ -420,7 +533,106 @@ async def assert_command_contract(module: Any) -> dict[str, int]:
         "enforced_policy_denials": enforced_policy_denials,
         "normalized_result_cases": normalized_result_cases,
         "result_middleware_rewrites": result_middleware_rewrites,
+        "durable_workflow_commands": durable_workflow_commands,
     }
+
+
+def response_json(response: Any) -> dict[str, Any]:
+    text = response_text(response)
+    marker = "```json\n"
+    start = text.find(marker)
+    end = text.find("\n```", start + len(marker))
+    if start < 0 or end < 0:
+        raise AssertionError("workflow response did not contain structured JSON")
+    payload = json.loads(text[start + len(marker) : end])
+    if not isinstance(payload, dict):
+        raise AssertionError("workflow response JSON was not an object")
+    return payload
+
+
+async def assert_workflow_commands(module: Any, handler: Any) -> int:
+    install_fake_driver_capabilities()
+    manager = FakeDriverManager()
+    caller_id = module._generate_uuid7()
+    parsed_id = __import__("uuid").UUID(caller_id)
+    if parsed_id.version != 7 or str(parsed_id) != caller_id:
+        raise AssertionError("generated workflow id was not canonical UUIDv7")
+
+    cases = [
+        (
+            "workflow-submit resilient -- DURABLE_TASK_SENTINEL",
+            "workflow-submit",
+            "vyane_workflow_submit",
+            "queued",
+        ),
+        (
+            f"workflow-status {caller_id}",
+            "workflow-status",
+            "vyane_workflow_status",
+            "running",
+        ),
+        (
+            f"workflow-cancel {caller_id}",
+            "workflow-cancel",
+            "vyane_workflow_cancel",
+            "cancelling",
+        ),
+    ]
+    for raw, mode, tool, state in cases:
+        ctx = FakeContext(manager)
+        ctx.request.request_context = {
+            "approval_level": "off",
+            "private_marker": "must-not-propagate",
+        }
+        response = await handler(ctx, raw)
+        payload = response_json(response)
+        assert_operation_result_schema(payload)
+        if payload["tool"] != tool or payload["mode"] != mode:
+            raise AssertionError(f"{mode} result identity drifted")
+        if payload["operation_status"] != "completed":
+            raise AssertionError(f"{mode} did not complete its control operation")
+        if payload["data"]["state"] != state:
+            raise AssertionError(f"{mode} lifecycle state drifted")
+        if "DURABLE_TASK_SENTINEL" in response_text(response):
+            raise AssertionError("durable task leaked into the command response")
+
+    if len(manager.invocations) != 3:
+        raise AssertionError("durable commands did not invoke exactly one capability")
+    submit, status, cancel = manager.invocations
+    expected_prefix = "driver://mcp/vyane-paw/tools/"
+    for invocation, tool in zip(
+        manager.invocations,
+        (
+            "vyane_workflow_submit",
+            "vyane_workflow_status",
+            "vyane_workflow_cancel",
+        ),
+        strict=True,
+    ):
+        if invocation.capability_id != f"{expected_prefix}{tool}#invoke":
+            raise AssertionError("durable command used an unexpected capability id")
+        if invocation.request_context != {"approval_level": "off"}:
+            raise AssertionError("durable command leaked request context")
+    workflow = tomllib.loads(submit.payload["workflow_toml"])
+    if workflow["workflow"] != {"name": "qwenpaw-durable"}:
+        raise AssertionError("durable workflow metadata drifted")
+    steps = workflow.get("step")
+    if not isinstance(steps, list) or len(steps) != 1:
+        raise AssertionError("durable submit was not a single-step workflow")
+    if steps[0] != {
+        "id": "task",
+        "target": "resilient",
+        "prompt": "DURABLE_TASK_SENTINEL",
+        "sandbox": "read-only",
+    }:
+        raise AssertionError("durable workflow source was not deterministic")
+    if submit.payload["prompt_files"] or submit.payload["vars"]:
+        raise AssertionError("durable submit added unbounded source material")
+    if status.payload != {"caller_id": caller_id}:
+        raise AssertionError("workflow status target drifted")
+    if cancel.payload != {"caller_id": caller_id}:
+        raise AssertionError("workflow cancel target drifted")
+    return len(cases)
 
 
 def assert_result_contract(module: Any) -> int:
@@ -466,6 +678,34 @@ def assert_result_contract(module: Any) -> int:
             },
             ("completed", "partial", "full"),
         ),
+        (
+            "vyane_workflow_submit",
+            "workflow-submit",
+            {
+                "caller_id": "0198a140-4d31-7dd4-8bcc-832b9a48cf34",
+                "state": "queued",
+            },
+            ("completed", "success", "full"),
+        ),
+        (
+            "vyane_workflow_status",
+            "workflow-status",
+            {
+                "caller_id": "0198a140-4d31-7dd4-8bcc-832b9a48cf34",
+                "state": "failed",
+                "failure_code": "dispatch_failed",
+            },
+            ("completed", "failure", "full"),
+        ),
+        (
+            "vyane_workflow_cancel",
+            "workflow-cancel",
+            {
+                "caller_id": "0198a140-4d31-7dd4-8bcc-832b9a48cf34",
+                "state": "cancelled",
+            },
+            ("completed", "success", "full"),
+        ),
     ]
     for tool, mode, payload, expected in cases:
         normalized = contract.normalize_tool_payload(
@@ -505,6 +745,22 @@ def assert_result_contract(module: Any) -> int:
     if "data" in rejected:
         raise AssertionError("rejected result included completed data")
     assert_operation_result_schema(rejected)
+    normalized_result_cases += 1
+
+    outcome_unknown = contract.normalize_tool_payload(
+        tool="vyane_workflow_submit",
+        mode="workflow-submit",
+        policy_profile="contract-test",
+        payload={
+            "status": "error",
+            "error": {"code": "outcome_unknown", "message": "raw detail"},
+        },
+    )
+    if outcome_unknown["retry_guidance"] != "check_status_before_retry":
+        raise AssertionError("indeterminate submit did not require status")
+    if outcome_unknown["error"] != {"code": "outcome_unknown"}:
+        raise AssertionError("indeterminate submit exposed raw detail")
+    assert_operation_result_schema(outcome_unknown)
     normalized_result_cases += 1
 
     malformed = contract.normalize_tool_payload(
@@ -629,6 +885,23 @@ def assert_policy_validation(module: Any) -> None:
             "allow_broadcast": True,
             "max_parallel_targets": 1,
             "allowed_targets": ["reviewer-a", "reviewer-b"],
+        },
+        {
+            "schema_version": "0.1.0",
+            "profile": "partial-workflow-tools",
+            "allowed_tools": ["vyane_workflow_submit"],
+            "allow_durable_workflows": True,
+            "allowed_targets": ["resilient"],
+        },
+        {
+            "schema_version": "0.1.0",
+            "profile": "workflow-without-targets",
+            "allowed_tools": [
+                "vyane_workflow_submit",
+                "vyane_workflow_status",
+                "vyane_workflow_cancel",
+            ],
+            "allow_durable_workflows": True,
         },
     ]
     for payload in invalid:
@@ -795,6 +1068,19 @@ async def assert_policy_enforcement(module: Any, handler: Any) -> int:
         assert_bounded_denial(denied, ["reviewer-a", "reviewer-b"])
         enforced_policy_denials += 1
 
+        default_workflow = FakeContext(FakeDriverManager())
+        denied = await handler(
+            default_workflow,
+            "workflow-submit resilient -- task",
+        )
+        if (
+            default_workflow.injections
+            or default_workflow.request.request_context is not None
+        ):
+            raise AssertionError("default policy mutated a denied workflow request")
+        assert_bounded_denial(denied, ["resilient"])
+        enforced_policy_denials += 1
+
         restrictive = {
             "schema_version": "0.1.0",
             "profile": "restricted",
@@ -922,7 +1208,14 @@ def assert_mcp_import() -> int:
     client = payload["mcpServers"]["vyane-paw"]
     if client["command"] != "vyane-paw-mcp":
         raise AssertionError("MCP import bypasses the validated launcher")
-    required = {"vyane_route", "vyane_dispatch", "vyane_broadcast"}
+    required = {
+        "vyane_route",
+        "vyane_dispatch",
+        "vyane_broadcast",
+        "vyane_workflow_submit",
+        "vyane_workflow_status",
+        "vyane_workflow_cancel",
+    }
     if sorted(client["tools"]) != sorted(required):
         raise AssertionError("MCP allowlist exceeds the product tool surface")
     env = client.get("env", {})
@@ -970,7 +1263,7 @@ def main() -> None:
             "metrics": {
                 "registered_commands": 1,
                 "registered_skills": 1,
-                "validated_product_modes": 4,
+                "validated_product_modes": 7,
                 "allowlisted_mcp_tools": allowlisted_tools,
                 "pinned_runtime_contracts": runtime_contracts,
                 **product_contract_metrics,

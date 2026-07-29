@@ -20,5 +20,8 @@ or its MCP API.
 Failover and review selectors are profile names, not arbitrary
 `provider/model` selectors. They accept only letters, digits, `.`, `_`, and
 `-`; this keeps user-controlled selectors out of the privileged instruction
-surface. The default MCP allowlist contains only the three tools used by the
-product modes.
+surface. The MCP product surface contains six tools: route, dispatch,
+broadcast, and the durable workflow submit/status/cancel controls. Durable
+workflow commands use QwenPaw's governed DriverManager directly and require a
+deployment policy that explicitly enables them and allowlists the target
+profile.

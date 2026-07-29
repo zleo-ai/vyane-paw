@@ -22,7 +22,10 @@
       "enum": [
         "vyane_route",
         "vyane_dispatch",
-        "vyane_broadcast"
+        "vyane_broadcast",
+        "vyane_workflow_submit",
+        "vyane_workflow_status",
+        "vyane_workflow_cancel"
       ]
     },
     "mode": {
@@ -30,7 +33,10 @@
         "route",
         "dispatch",
         "failover",
-        "review"
+        "review",
+        "workflow-submit",
+        "workflow-status",
+        "workflow-cancel"
       ]
     },
     "policy_profile": {
@@ -61,7 +67,10 @@
       ]
     },
     "retry_guidance": {
-      "const": "do_not_retry"
+      "enum": [
+        "do_not_retry",
+        "check_status_before_retry"
+      ]
     },
     "data": {
       "type": "object"
@@ -97,6 +106,63 @@
         "properties": {
           "tool": {
             "const": "vyane_route"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "workflow-submit"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "tool": {
+            "const": "vyane_workflow_submit"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "workflow-status"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "tool": {
+            "const": "vyane_workflow_status"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "workflow-cancel"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "tool": {
+            "const": "vyane_workflow_cancel"
           }
         }
       }

@@ -29,7 +29,7 @@ uv run \
 jq -e \
   '.scenario == "product_entry"
    and .result == "passed"
-   and .metrics.validated_product_modes == 4
+   and .metrics.validated_product_modes == 7
    and .metrics.fixed_private_paths == 0' \
   "$evidence_path" \
   >/dev/null
