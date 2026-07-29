@@ -21,6 +21,9 @@
         "compatibility",
         "route",
         "failover",
+        "failure_isolation",
+        "timeout",
+        "cancellation",
         "broadcast"
       ]
     },
@@ -91,6 +94,231 @@
               },
               "server_process_reaped": {
                 "const": 1
+              }
+            }
+          }
+        },
+        "required": [
+          "metrics"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scenario": {
+            "const": "route"
+          }
+        },
+        "required": [
+          "scenario"
+        ]
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "required": [
+              "routing_decision_valid",
+              "operator_interventions"
+            ],
+            "properties": {
+              "routing_decision_valid": {
+                "const": 1
+              },
+              "operator_interventions": {
+                "const": 0
+              }
+            }
+          }
+        },
+        "required": [
+          "metrics"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scenario": {
+            "const": "failover"
+          }
+        },
+        "required": [
+          "scenario"
+        ]
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "required": [
+              "fallback_success",
+              "fallback_recovery_latency_ms",
+              "logical_attempts",
+              "primary_http_requests",
+              "fallback_http_requests",
+              "fallback_duplicate_requests"
+            ],
+            "properties": {
+              "fallback_success": {
+                "const": 1
+              },
+              "fallback_recovery_latency_ms": {
+                "minimum": 0
+              },
+              "logical_attempts": {
+                "const": 2
+              },
+              "primary_http_requests": {
+                "minimum": 1
+              },
+              "fallback_http_requests": {
+                "const": 1
+              },
+              "fallback_duplicate_requests": {
+                "const": 0
+              }
+            }
+          }
+        },
+        "required": [
+          "metrics"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scenario": {
+            "const": "failure_isolation"
+          }
+        },
+        "required": [
+          "scenario"
+        ]
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "required": [
+              "isolated_successes",
+              "isolated_failures"
+            ],
+            "properties": {
+              "isolated_successes": {
+                "minimum": 1
+              },
+              "isolated_failures": {
+                "minimum": 1
+              }
+            }
+          }
+        },
+        "required": [
+          "metrics"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scenario": {
+            "const": "timeout"
+          }
+        },
+        "required": [
+          "scenario"
+        ]
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "required": [
+              "timeout_recorded",
+              "timeout_duration_ms",
+              "timeout_bound_ms"
+            ],
+            "properties": {
+              "timeout_recorded": {
+                "const": 1
+              },
+              "timeout_duration_ms": {
+                "minimum": 0
+              },
+              "timeout_bound_ms": {
+                "const": 2500
+              }
+            }
+          }
+        },
+        "required": [
+          "metrics"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scenario": {
+            "const": "cancellation"
+          }
+        },
+        "required": [
+          "scenario"
+        ]
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "required": [
+              "cancellation_probe_completed",
+              "cancellation_propagated"
+            ],
+            "properties": {
+              "cancellation_probe_completed": {
+                "const": 1
+              },
+              "cancellation_propagated": {
+                "enum": [
+                  0,
+                  1
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "metrics"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scenario": {
+            "const": "broadcast"
+          }
+        },
+        "required": [
+          "scenario"
+        ]
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "required": [
+              "independent_valid_responses",
+              "max_observed_concurrency",
+              "operator_interventions"
+            ],
+            "properties": {
+              "independent_valid_responses": {
+                "minimum": 2
+              },
+              "max_observed_concurrency": {
+                "minimum": 2
+              },
+              "operator_interventions": {
+                "const": 0
               }
             }
           }
