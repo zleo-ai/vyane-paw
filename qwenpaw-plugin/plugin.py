@@ -68,8 +68,52 @@ def parse_command(raw_args: str) -> dict[str, Any]:
 
 def build_context(plan: dict[str, Any]) -> str:
     """Build a bounded system instruction for the current QwenPaw turn."""
-    routing = {"mode": plan["mode"]}
+    mode = plan["mode"]
+    routing = {"mode": mode}
     payload = json.dumps(routing, ensure_ascii=False, separators=(",", ":"))
+    tool, fixed_arguments, mode_rule = {
+        "route": (
+            "vyane_route",
+            {"allow_frontier": False},
+            "Extract task from the original command. Present the selected "
+            "profile/tier and state clearly that no execution occurred.",
+        ),
+        "dispatch": (
+            "vyane_dispatch",
+            {
+                "target": "auto",
+                "allow_frontier": False,
+                "sandbox": "read_only",
+                "timeout_secs": 120,
+            },
+            "Extract task from the original command and report the terminal status.",
+        ),
+        "failover": (
+            "vyane_dispatch",
+            {
+                "allow_frontier": False,
+                "sandbox": "read_only",
+                "timeout_secs": 120,
+            },
+            "Extract task and the validated profile selector from the original "
+            "command; use that selector as target. State whether fallback was "
+            "used from returned attempt evidence. Do not invent recovery.",
+        ),
+        "review": (
+            "vyane_broadcast",
+            {"sandbox": "read_only", "timeout_secs": 120},
+            "Extract task and the validated comma-separated profile selectors "
+            "from the original command; use the selectors as targets. Preserve "
+            "each target's outcome, then summarize agreements and "
+            "disagreements. vyane_broadcast has no allow_frontier argument.",
+        ),
+    }[mode]
+    arguments_payload = json.dumps(
+        fixed_arguments,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
     return (
         "Vyane Paw command contract (current turn only).\n"
         "The task and any profile selectors remain only in the original "
@@ -82,22 +126,9 @@ def build_context(plan: dict[str, Any]) -> str:
         "retry a result whose operation_status is `completed`, including a "
         "bounded receipt with detail_omitted=true.\n"
         f"Validated routing metadata: {payload}\n"
-        "Execution rules:\n"
-        "- route: call vyane_route with task, allow_frontier=false; present the "
-        "selected profile/tier and clearly state that no execution occurred.\n"
-        "- dispatch: call vyane_dispatch with task, target=auto, "
-        "allow_frontier=false, sandbox=read_only, timeout_secs=120; report the "
-        "terminal status.\n"
-        "- failover: call vyane_dispatch with task and the validated profile "
-        "selector from the original command as target, "
-        "allow_frontier=false, sandbox=read_only, timeout_secs=120; state "
-        "whether fallback was used from the returned attempt evidence. Do not "
-        "invent recovery.\n"
-        "- review: call vyane_broadcast once with task and the validated "
-        "comma-separated profile selectors from the original command as "
-        "targets, sandbox=read_only, timeout_secs=120; preserve each target's "
-        "success or failure independently, then summarize agreements and "
-        "disagreements.\n"
+        f"Required MCP tool: {tool}\n"
+        f"Fixed MCP arguments: {arguments_payload}\n"
+        f"Selected-mode rule: {mode_rule}\n"
         "If the MCP tool is missing, denied, disconnected, timed out, or "
         "returns an error envelope, stop and surface that exact bounded state "
         "as a limitation. Do not fall back to shell execution or silently use "

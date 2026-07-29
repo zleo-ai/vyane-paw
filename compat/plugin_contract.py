@@ -204,27 +204,38 @@ async def assert_command_contract(module: Any) -> None:
             "failover": "vyane_dispatch",
             "review": "vyane_broadcast",
         }[mode]
-        if expected_tool not in content:
+        if f"Required MCP tool: {expected_tool}\n" not in content:
             raise AssertionError(f"{mode} did not bind the expected MCP tool")
-        expected_safety = {
-            "route": ("allow_frontier=false",),
-            "dispatch": (
-                "allow_frontier=false",
-                "sandbox=read_only",
-                "timeout_secs=120",
+        arguments_line = next(
+            (
+                line
+                for line in content.splitlines()
+                if line.startswith("Fixed MCP arguments: ")
             ),
-            "failover": (
-                "allow_frontier=false",
-                "sandbox=read_only",
-                "timeout_secs=120",
-            ),
-            "review": ("sandbox=read_only", "timeout_secs=120"),
+            None,
+        )
+        if arguments_line is None:
+            raise AssertionError(f"{mode} has no fixed MCP argument contract")
+        fixed_arguments = json.loads(
+            arguments_line.removeprefix("Fixed MCP arguments: "),
+        )
+        expected_arguments = {
+            "route": {"allow_frontier": False},
+            "dispatch": {
+                "target": "auto",
+                "allow_frontier": False,
+                "sandbox": "read_only",
+                "timeout_secs": 120,
+            },
+            "failover": {
+                "allow_frontier": False,
+                "sandbox": "read_only",
+                "timeout_secs": 120,
+            },
+            "review": {"sandbox": "read_only", "timeout_secs": 120},
         }[mode]
-        for safety_token in expected_safety:
-            if safety_token not in content:
-                raise AssertionError(
-                    f"{mode} lost safe argument {safety_token}",
-                )
+        if fixed_arguments != expected_arguments:
+            raise AssertionError(f"{mode} fixed MCP arguments drifted")
         if metadata != {"priority": 20, "source": "plugin:vyane-paw"}:
             raise AssertionError("unexpected context injection metadata")
 
