@@ -19,6 +19,9 @@ PRODUCT_TOOLS = frozenset(
         "vyane_route",
         "vyane_dispatch",
         "vyane_broadcast",
+        "vyane_workflow_submit",
+        "vyane_workflow_status",
+        "vyane_workflow_cancel",
     },
 )
 _PROFILE_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
@@ -27,6 +30,9 @@ _TOOL_FOR_MODE = {
     "dispatch": "vyane_dispatch",
     "failover": "vyane_dispatch",
     "review": "vyane_broadcast",
+    "workflow-submit": "vyane_workflow_submit",
+    "workflow-status": "vyane_workflow_status",
+    "workflow-cancel": "vyane_workflow_cancel",
 }
 
 
@@ -71,6 +77,7 @@ class RuntimePolicy:
     allowed_tools: frozenset[str]
     allow_failover: bool
     allow_broadcast: bool
+    allow_durable_workflows: bool
     max_parallel_targets: int
     allowed_targets: frozenset[str] | None
 
@@ -85,6 +92,7 @@ class RuntimePolicy:
             "allowed_tools",
             "allow_failover",
             "allow_broadcast",
+            "allow_durable_workflows",
             "max_parallel_targets",
             "allowed_targets",
         }
@@ -116,6 +124,11 @@ class RuntimePolicy:
 
         allow_failover = _strict_bool(payload, "allow_failover", False)
         allow_broadcast = _strict_bool(payload, "allow_broadcast", False)
+        allow_durable_workflows = _strict_bool(
+            payload,
+            "allow_durable_workflows",
+            False,
+        )
         raw_targets = payload.get("allowed_targets")
         targets: frozenset[str] | None
         if raw_targets is None:
@@ -134,7 +147,16 @@ class RuntimePolicy:
             raise PolicyError("启用失败切换时必须授权 vyane_dispatch。")
         if allow_broadcast and "vyane_broadcast" not in tools:
             raise PolicyError("启用多目标评审时必须授权 vyane_broadcast。")
-        if (allow_failover or allow_broadcast) and not targets:
+        workflow_tools = {
+            "vyane_workflow_submit",
+            "vyane_workflow_status",
+            "vyane_workflow_cancel",
+        }
+        if allow_durable_workflows and not workflow_tools.issubset(tools):
+            raise PolicyError("启用持久工作流时必须授权全部 workflow 控制工具。")
+        if (
+            allow_failover or allow_broadcast or allow_durable_workflows
+        ) and not targets:
             raise PolicyError("显式目标能力必须配置非空 allowed_targets。")
         if allow_broadcast and raw_max < 2:
             raise PolicyError("启用多目标评审时并行目标上限不能小于 2。")
@@ -145,6 +167,7 @@ class RuntimePolicy:
             allowed_tools=tools,
             allow_failover=allow_failover,
             allow_broadcast=allow_broadcast,
+            allow_durable_workflows=allow_durable_workflows,
             max_parallel_targets=raw_max,
             allowed_targets=targets,
         )
@@ -193,6 +216,16 @@ class RuntimePolicy:
             if denied:
                 raise PolicyError("目标 profile 未被当前策略授权。")
             return
+        if mode in {"workflow-submit", "workflow-status", "workflow-cancel"}:
+            if not self.allow_durable_workflows:
+                raise PolicyError("当前策略未授权持久工作流控制。")
+            if mode == "workflow-submit":
+                target = _profile_name(plan.get("target"), "target")
+                if self.allowed_targets is None or target not in self.allowed_targets:
+                    raise PolicyError("目标 profile 未被当前策略授权。")
+            elif "target" in plan or "targets" in plan or "task" in plan:
+                raise PolicyError("状态与取消命令不能携带执行目标或任务。")
+            return
         raise PolicyError("命令模式未被策略识别。")
 
 
@@ -203,6 +236,7 @@ _DEFAULT_POLICY = RuntimePolicy.from_mapping(
         "allowed_tools": ["vyane_route", "vyane_dispatch"],
         "allow_failover": False,
         "allow_broadcast": False,
+        "allow_durable_workflows": False,
         "max_parallel_targets": 1,
         "allowed_targets": [],
     },

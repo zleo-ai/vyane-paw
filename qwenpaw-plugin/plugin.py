@@ -5,15 +5,34 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
+import time
+import uuid
 from pathlib import Path
 from typing import Any
 
-from .core import PolicyError, exposed_tool, load_runtime_policy, required_tool
+from .core import (
+    MCP_CLIENT_NAMESPACE,
+    PolicyError,
+    exposed_tool,
+    load_runtime_policy,
+    required_tool,
+)
+from .result_contract import (
+    normalize_tool_payload,
+    payload_from_text_blocks,
+    protocol_failure,
+)
 
 
 _PLUGIN_DIR = Path(__file__).parent
-_MODES = frozenset({"route", "dispatch", "failover", "review"})
+_MODEL_MODES = frozenset({"route", "dispatch", "failover", "review"})
+_WORKFLOW_MODES = frozenset(
+    {"workflow-submit", "workflow-status", "workflow-cancel"},
+)
+_MODES = _MODEL_MODES | _WORKFLOW_MODES
 _MAX_REVIEW_TARGETS = 4
+_MAX_DURABLE_TASK_BYTES = 64 * 1024
 _PROFILE_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 
 
@@ -25,6 +44,30 @@ def _validate_profile(name: str) -> None:
         )
 
 
+def _validate_uuid7(value: str) -> str:
+    try:
+        parsed = uuid.UUID(value)
+    except (AttributeError, ValueError) as exc:
+        raise ValueError("workflow id 必须是 canonical lowercase UUIDv7。") from exc
+    if parsed.version != 7 or str(parsed) != value:
+        raise ValueError("workflow id 必须是 canonical lowercase UUIDv7。")
+    return value
+
+
+def _validate_durable_task(task: str) -> str:
+    if not task:
+        raise ValueError("任务不能为空。")
+    try:
+        encoded = task.encode("utf-8")
+    except UnicodeError as exc:
+        raise ValueError("任务必须是有效 UTF-8 文本。") from exc
+    if len(encoded) > _MAX_DURABLE_TASK_BYTES:
+        raise ValueError("持久任务不能超过 64 KiB。")
+    if "\x00" in task:
+        raise ValueError("持久任务不能包含 NUL 字符。")
+    return task
+
+
 def parse_command(raw_args: str) -> dict[str, Any]:
     """Parse `/vyane` arguments without executing or logging task content."""
     mode, separator, remainder = raw_args.strip().partition(" ")
@@ -32,7 +75,10 @@ def parse_command(raw_args: str) -> dict[str, Any]:
         raise ValueError(
             "用法：/vyane route <任务>；/vyane dispatch <任务>；"
             "/vyane failover <profile> -- <任务>；"
-            "/vyane review <profile-a,profile-b> -- <任务>",
+            "/vyane review <profile-a,profile-b> -- <任务>；"
+            "/vyane workflow-submit <profile> -- <任务>；"
+            "/vyane workflow-status <uuidv7>；"
+            "/vyane workflow-cancel <uuidv7>",
         )
 
     if mode in {"route", "dispatch"}:
@@ -41,16 +87,28 @@ def parse_command(raw_args: str) -> dict[str, Any]:
             raise ValueError("任务不能为空。")
         return {"mode": mode, "task": task}
 
+    if mode in {"workflow-status", "workflow-cancel"}:
+        caller_id = remainder.strip()
+        if " " in caller_id:
+            raise ValueError(f"/vyane {mode} 只接受一个 workflow id。")
+        return {"mode": mode, "caller_id": _validate_uuid7(caller_id)}
+
     selector, marker, task = remainder.partition("--")
     selector = selector.strip()
     task = task.strip()
     if not marker or not selector or not task:
         raise ValueError(f"/vyane {mode} 需要使用 `<目标> -- <任务>` 格式。")
 
-    if mode == "failover":
+    if mode in {"failover", "workflow-submit"}:
         if "," in selector:
-            raise ValueError("failover 只接受一个已配置了 failover 链的 profile。")
+            raise ValueError(f"{mode} 只接受一个 profile。")
         _validate_profile(selector)
+        if mode == "workflow-submit":
+            return {
+                "mode": mode,
+                "task": _validate_durable_task(task),
+                "target": selector,
+            }
         return {"mode": mode, "task": task, "target": selector}
 
     raw_targets = selector.split(",")
@@ -149,6 +207,129 @@ def _assistant_message(text: str) -> Any:
     )
 
 
+def _generate_uuid7() -> str:
+    timestamp_ms = int(time.time_ns() // 1_000_000) & ((1 << 48) - 1)
+    random_bits = secrets.randbits(74)
+    random_a = random_bits >> 62
+    random_b = random_bits & ((1 << 62) - 1)
+    value = (
+        (timestamp_ms << 80) | (7 << 76) | (random_a << 64) | (0b10 << 62) | random_b
+    )
+    return str(uuid.UUID(int=value))
+
+
+def _workflow_source(target: str, task: str) -> str:
+    return (
+        '[workflow]\nname = "qwenpaw-durable"\n\n'
+        "[[step]]\n"
+        'id = "task"\n'
+        f"target = {json.dumps(target, ensure_ascii=False)}\n"
+        f"prompt = {json.dumps(task, ensure_ascii=False)}\n"
+        'sandbox = "read-only"\n'
+    )
+
+
+def _driver_request_context(ctx: Any) -> dict[str, str]:
+    request = getattr(ctx, "request", None)
+    current = getattr(request, "request_context", None)
+    if not isinstance(current, dict):
+        return {}
+    allowed = ("approval_level", "channel", "session_id", "user_id")
+    return {
+        key: value for key in allowed if isinstance((value := current.get(key)), str)
+    }
+
+
+async def _invoke_workflow_control(
+    ctx: Any,
+    *,
+    plan: dict[str, Any],
+    policy_profile: str,
+) -> dict[str, Any]:
+    raw_tool = required_tool(plan)
+    manager = getattr(getattr(ctx, "workspace", None), "driver_manager", None)
+    if manager is None:
+        return protocol_failure(
+            tool=raw_tool,
+            mode=plan["mode"],
+            policy_profile=policy_profile,
+            code="driver_unavailable",
+        )
+
+    if plan["mode"] == "workflow-submit":
+        caller_id = _generate_uuid7()
+        arguments = {
+            "caller_id": caller_id,
+            "workflow_toml": _workflow_source(plan["target"], plan["task"]),
+            "prompt_files": [],
+            "vars": {},
+        }
+    else:
+        caller_id = plan["caller_id"]
+        arguments = {"caller_id": plan["caller_id"]}
+    try:
+        from qwenpaw.drivers.capabilities import (
+            DriverInvocation,
+            format_capability_id,
+        )
+
+        invocation = DriverInvocation(
+            capability_id=format_capability_id(
+                "mcp",
+                MCP_CLIENT_NAMESPACE,
+                "tool",
+                "invoke",
+                raw_tool,
+            ),
+            payload=arguments,
+            request_context=_driver_request_context(ctx),
+        )
+        result = await manager.invoke_capability(invocation)
+    except Exception:
+        result = None
+        payload: dict[str, Any] = {
+            "ok": False,
+            "type": "driver_exception",
+        }
+    if result is not None and not result.ok:
+        payload: dict[str, Any] = {
+            "ok": False,
+            "type": result.error_type or "driver_failure",
+        }
+    elif result is not None:
+        content = getattr(result.value, "content", None)
+        parsed = (
+            payload_from_text_blocks(content) if isinstance(content, list) else None
+        )
+        if parsed is None:
+            return protocol_failure(
+                tool=raw_tool,
+                mode=plan["mode"],
+                policy_profile=policy_profile,
+                code="missing_structured_payload",
+            )
+        payload = dict(parsed)
+    return normalize_tool_payload(
+        tool=raw_tool,
+        mode=plan["mode"],
+        policy_profile=policy_profile,
+        payload=payload,
+        correlation_id=caller_id,
+    )
+
+
+def _workflow_response(result: dict[str, Any]) -> Any:
+    serialized = json.dumps(
+        result,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return _assistant_message(
+        f"**Vyane Paw 持久工作流结果**\n\n```json\n{serialized}\n```",
+    )
+
+
 def _apply_request_tool_boundary(ctx: Any, tool: str) -> None:
     """Expose exactly one authorized tool when QwenPaw builds this turn."""
     request = getattr(ctx, "request", None)
@@ -185,6 +366,13 @@ async def _vyane_command(ctx: Any, args: str) -> Any | None:
     try:
         policy = load_runtime_policy()
         policy.authorize(plan)
+        if plan["mode"] in _WORKFLOW_MODES:
+            result = await _invoke_workflow_control(
+                ctx,
+                plan=plan,
+                policy_profile=policy.profile,
+            )
+            return _workflow_response(result)
         raw_tool = required_tool(plan)
         tool = exposed_tool(raw_tool)
         _apply_request_tool_boundary(ctx, tool)
@@ -213,7 +401,7 @@ class VyanePawPlugin:
             "vyane",
             _vyane_command,
             category="plugin",
-            help_text="Vyane 路由、失败切换和多模型评审",
+            help_text="Vyane 路由、失败切换、多模型评审和持久工作流",
             metadata={"product": "vyane-paw", "version": "0.1.0"},
         )
         api.register_skill_provider(

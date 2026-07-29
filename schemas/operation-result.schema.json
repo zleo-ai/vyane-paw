@@ -22,7 +22,10 @@
       "enum": [
         "vyane_route",
         "vyane_dispatch",
-        "vyane_broadcast"
+        "vyane_broadcast",
+        "vyane_workflow_submit",
+        "vyane_workflow_status",
+        "vyane_workflow_cancel"
       ]
     },
     "mode": {
@@ -30,7 +33,10 @@
         "route",
         "dispatch",
         "failover",
-        "review"
+        "review",
+        "workflow-submit",
+        "workflow-status",
+        "workflow-cancel"
       ]
     },
     "policy_profile": {
@@ -61,10 +67,26 @@
       ]
     },
     "retry_guidance": {
-      "const": "do_not_retry"
+      "enum": [
+        "do_not_retry",
+        "check_status_before_retry"
+      ]
     },
     "data": {
       "type": "object"
+    },
+    "correlation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "caller_id"
+      ],
+      "properties": {
+        "caller_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        }
+      }
     },
     "error": {
       "type": "object",
@@ -97,6 +119,102 @@
         "properties": {
           "tool": {
             "const": "vyane_route"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "retry_guidance": {
+            "const": "check_status_before_retry"
+          }
+        },
+        "required": [
+          "retry_guidance"
+        ]
+      },
+      "then": {
+        "required": [
+          "correlation"
+        ],
+        "properties": {
+          "tool": {
+            "const": "vyane_workflow_submit"
+          },
+          "operation_status": {
+            "const": "rejected"
+          },
+          "error": {
+            "properties": {
+              "code": {
+                "const": "outcome_unknown"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "not": {
+          "required": [
+            "correlation"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "workflow-submit"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "tool": {
+            "const": "vyane_workflow_submit"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "workflow-status"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "tool": {
+            "const": "vyane_workflow_status"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "workflow-cancel"
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      },
+      "then": {
+        "properties": {
+          "tool": {
+            "const": "vyane_workflow_cancel"
           }
         }
       }

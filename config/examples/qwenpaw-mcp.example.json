@@ -2,7 +2,7 @@
   "mcpServers": {
     "vyane-paw": {
       "name": "Vyane Paw",
-      "description": "Local Vyane routing, failover, and bounded multi-model review",
+      "description": "Local Vyane routing, failover, bounded multi-model review, and durable workflow control",
       "enabled": true,
       "transport": "stdio",
       "command": "vyane-paw-mcp",
@@ -13,7 +13,10 @@
       "tools": [
         "vyane_route",
         "vyane_dispatch",
-        "vyane_broadcast"
+        "vyane_broadcast",
+        "vyane_workflow_submit",
+        "vyane_workflow_status",
+        "vyane_workflow_cancel"
       ]
     }
   }

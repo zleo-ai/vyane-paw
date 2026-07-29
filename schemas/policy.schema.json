@@ -25,7 +25,10 @@
         "enum": [
           "vyane_route",
           "vyane_dispatch",
-          "vyane_broadcast"
+          "vyane_broadcast",
+          "vyane_workflow_submit",
+          "vyane_workflow_status",
+          "vyane_workflow_cancel"
         ]
       }
     },
@@ -34,6 +37,10 @@
       "default": false
     },
     "allow_broadcast": {
+      "type": "boolean",
+      "default": false
+    },
+    "allow_durable_workflows": {
       "type": "boolean",
       "default": false
     },
@@ -107,6 +114,47 @@
         "required": [
           "allowed_targets",
           "max_parallel_targets"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "allow_durable_workflows": {
+            "const": true
+          }
+        },
+        "required": [
+          "allow_durable_workflows"
+        ]
+      },
+      "then": {
+        "properties": {
+          "allowed_tools": {
+            "allOf": [
+              {
+                "contains": {
+                  "const": "vyane_workflow_submit"
+                }
+              },
+              {
+                "contains": {
+                  "const": "vyane_workflow_status"
+                }
+              },
+              {
+                "contains": {
+                  "const": "vyane_workflow_cancel"
+                }
+              }
+            ]
+          },
+          "allowed_targets": {
+            "minItems": 1
+          }
+        },
+        "required": [
+          "allowed_targets"
         ]
       }
     }

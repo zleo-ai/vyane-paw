@@ -21,6 +21,7 @@
         "compatibility",
         "product_entry",
         "qwenpaw_application",
+        "durable_workflow",
         "route",
         "failover",
         "failure_isolation",
@@ -98,6 +99,67 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scenario": {
+            "const": "durable_workflow"
+          }
+        },
+        "required": [
+          "scenario"
+        ]
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "required": [
+              "app_exit_code",
+              "app_process_reaped",
+              "daemon_process_reaped",
+              "mcp_process_reaped",
+              "provider_requests",
+              "repeated_cancel_requests",
+              "task_log_leaks",
+              "terminal_cancelled",
+              "workflow_submitted"
+            ],
+            "properties": {
+              "app_exit_code": {
+                "const": 0
+              },
+              "app_process_reaped": {
+                "const": 1
+              },
+              "daemon_process_reaped": {
+                "const": 1
+              },
+              "mcp_process_reaped": {
+                "const": 1
+              },
+              "provider_requests": {
+                "minimum": 1
+              },
+              "repeated_cancel_requests": {
+                "minimum": 2
+              },
+              "task_log_leaks": {
+                "const": 0
+              },
+              "terminal_cancelled": {
+                "const": 1
+              },
+              "workflow_submitted": {
+                "const": 1
+              }
+            }
+          }
+        },
+        "required": [
+          "metrics"
+        ]
+      }
+    },
     {
       "if": {
         "properties": {

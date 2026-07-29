@@ -12,6 +12,28 @@ from typing import Any
 RESULT_SCHEMA_VERSION = "0.1.0"
 _FINAL_OPERATION = "completed"
 _SAFE_CODE = re.compile(r"^[a-z0-9_.-]{1,128}$")
+_UUID7 = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+)
+_WORKFLOW_TOOLS = frozenset(
+    {
+        "vyane_workflow_submit",
+        "vyane_workflow_status",
+        "vyane_workflow_cancel",
+    },
+)
+_WORKFLOW_STATES = frozenset(
+    {
+        "queued",
+        "running",
+        "cancelling",
+        "succeeded",
+        "failed",
+        "timed_out",
+        "cancelled",
+        "interrupted",
+    },
+)
 
 
 def _safe_code(value: Any) -> str:
@@ -72,6 +94,13 @@ def _completed_outcome(tool: str, payload: Mapping[str, Any]) -> str:
         return "success"
     if tool == "vyane_broadcast":
         return _broadcast_outcome(payload.get("items"))
+    if tool in _WORKFLOW_TOOLS:
+        state = str(payload.get("state") or "")
+        if state in {"failed", "timed_out", "interrupted"}:
+            return "failure"
+        if state in _WORKFLOW_STATES:
+            return "success"
+        return "unknown"
     return _record_outcome(payload.get("record") or payload.get("receipt"))
 
 
@@ -178,6 +207,8 @@ def _project_completed_payload(
                 "selection_basis",
             ),
         )
+    if tool in _WORKFLOW_TOOLS:
+        return _select(payload, ("caller_id", "state", "failure_code"))
     projected = _select(
         payload,
         (
@@ -211,12 +242,18 @@ def normalize_tool_payload(
     mode: str,
     policy_profile: str,
     payload: Mapping[str, Any],
+    correlation_id: str | None = None,
 ) -> dict[str, Any]:
     """Map a Vyane payload into the stable Vyane Paw result envelope."""
     if payload.get("status") == "error":
         error = payload.get("error")
         code = _safe_code(error.get("code") if isinstance(error, Mapping) else None)
-        return {
+        retry_guidance = (
+            "check_status_before_retry"
+            if tool == "vyane_workflow_submit" and code == "outcome_unknown"
+            else "do_not_retry"
+        )
+        result = {
             "schema_version": RESULT_SCHEMA_VERSION,
             "tool": tool,
             "mode": mode,
@@ -224,9 +261,21 @@ def normalize_tool_payload(
             "operation_status": "rejected",
             "outcome": "failure",
             "detail_state": "not_applicable",
-            "retry_guidance": "do_not_retry",
+            "retry_guidance": retry_guidance,
             "error": {"code": code},
         }
+        if retry_guidance == "check_status_before_retry":
+            if not isinstance(correlation_id, str) or not _UUID7.fullmatch(
+                correlation_id,
+            ):
+                return protocol_failure(
+                    tool=tool,
+                    mode=mode,
+                    policy_profile=policy_profile,
+                    code="missing_correlation_id",
+                )
+            result["correlation"] = {"caller_id": correlation_id}
+        return result
 
     if payload.get("ok") is False:
         return {
@@ -243,6 +292,13 @@ def normalize_tool_payload(
 
     operation_status = payload.get("operation_status")
     if tool == "vyane_route" and operation_status is None:
+        operation_status = _FINAL_OPERATION
+    if (
+        tool in _WORKFLOW_TOOLS
+        and operation_status is None
+        and payload.get("state") in _WORKFLOW_STATES
+        and isinstance(payload.get("caller_id"), str)
+    ):
         operation_status = _FINAL_OPERATION
     if operation_status != _FINAL_OPERATION:
         return protocol_failure(
@@ -303,6 +359,8 @@ def payload_from_text_blocks(content: Iterable[Any]) -> Mapping[str, Any] | None
         "status",
         "ok",
         "profile",
+        "state",
+        "caller_id",
     }
     for block in content:
         text = (
