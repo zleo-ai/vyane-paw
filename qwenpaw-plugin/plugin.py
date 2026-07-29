@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .core import PolicyError, load_runtime_policy, required_tool
+from .core import PolicyError, exposed_tool, load_runtime_policy, required_tool
 
 
 _PLUGIN_DIR = Path(__file__).parent
@@ -73,7 +73,7 @@ def build_context(plan: dict[str, Any]) -> str:
     mode = plan["mode"]
     routing = {"mode": mode}
     payload = json.dumps(routing, ensure_ascii=False, separators=(",", ":"))
-    tool, fixed_arguments, mode_rule = {
+    raw_tool, fixed_arguments, mode_rule = {
         "route": (
             "vyane_route",
             {"allow_frontier": False},
@@ -110,6 +110,7 @@ def build_context(plan: dict[str, Any]) -> str:
             "disagreements. vyane_broadcast has no allow_frontier argument.",
         ),
     }[mode]
+    tool = exposed_tool(raw_tool)
     arguments_payload = json.dumps(
         fixed_arguments,
         ensure_ascii=False,
@@ -160,6 +161,7 @@ def _apply_request_tool_boundary(ctx: Any, tool: str) -> None:
     if not isinstance(current, dict):
         raise PolicyError("QwenPaw 请求上下文格式无效。")
     current["subagent_allowed_tools"] = [tool]
+    current["subagent_skills"] = []
 
 
 def _result_middleware_factory(ctx: Any, _agent_config: Any) -> Any | None:
@@ -183,23 +185,23 @@ async def _vyane_command(ctx: Any, args: str) -> Any | None:
     try:
         policy = load_runtime_policy()
         policy.authorize(plan)
-        tool = required_tool(plan)
+        raw_tool = required_tool(plan)
+        tool = exposed_tool(raw_tool)
         _apply_request_tool_boundary(ctx, tool)
         ctx.request.request_context["vyane_paw_result_contract"] = {
-            "tool": tool,
+            "tool": raw_tool,
+            "exposed_tool": tool,
             "mode": plan["mode"],
             "policy_profile": policy.profile,
+            "system_prompt": (
+                build_context(plan)
+                + "\n"
+                + f"Enforced policy profile: {policy.profile}\n"
+                + f"Policy schema version: {policy.schema_version}"
+            ),
         }
     except PolicyError as exc:
         return _assistant_message(f"**Vyane Paw 策略拒绝**\n\n{exc}")
-    ctx.inject_context(
-        build_context(plan)
-        + "\n"
-        + f"Enforced policy profile: {policy.profile}\n"
-        + f"Policy schema version: {policy.schema_version}",
-        priority=20,
-        source="plugin:vyane-paw",
-    )
     return None
 
 

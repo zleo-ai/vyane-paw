@@ -13,6 +13,7 @@ from typing import Any, Mapping
 
 POLICY_ENV = "VYANE_PAW_POLICY"
 POLICY_SCHEMA_VERSION = "0.1.0"
+MCP_CLIENT_NAMESPACE = "vyane-paw"
 PRODUCT_TOOLS = frozenset(
     {
         "vyane_route",
@@ -39,6 +40,13 @@ def required_tool(plan: Mapping[str, Any]) -> str:
     if tool is None:
         raise PolicyError("命令未绑定有效的 Vyane 工具。")
     return tool
+
+
+def exposed_tool(tool: str) -> str:
+    """Return QwenPaw's model-visible name for a Vyane MCP tool."""
+    if tool not in PRODUCT_TOOLS:
+        raise PolicyError("命令未绑定有效的 Vyane 工具。")
+    return f"{MCP_CLIENT_NAMESPACE}__{tool}"
 
 
 def _profile_name(value: Any, field: str) -> str:
