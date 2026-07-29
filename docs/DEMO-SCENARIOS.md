@@ -45,8 +45,8 @@ fixtures.
 
 `scripts/run-vp02.sh` exercises all three flows through QwenPaw's pinned,
 unmodified stdio MCP client and local synthetic OpenAI-compatible endpoints.
-It records sanitized route, failover, and broadcast evidence without requiring
-provider credentials.
+It records sanitized route, failover, failure-isolation, timeout, cancellation,
+and broadcast evidence without requiring provider credentials.
 
 The pinned QwenPaw client currently does not turn local coroutine cancellation
 into an MCP `notifications/cancelled` message. Timeout is enforced and recorded

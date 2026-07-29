@@ -2,8 +2,8 @@
   "schema_version": "0.1.0",
   "scenario": "failover",
   "sanitization_state": "sanitized",
-  "started_at": "2026-07-29T12:35:57.222042+00:00",
-  "duration_ms": 6319,
+  "started_at": "2026-07-29T12:46:56.085007+00:00",
+  "duration_ms": 7,
   "upstream_revisions": {
     "qwenpaw": "ebb5b24d0b2559af51d71a38547d88d384357a64",
     "vyane_rs": "4848ec4f9d0b740fd8dc5f5586bc30111dc3d373",
@@ -13,19 +13,15 @@
   "result": "passed",
   "metrics": {
     "fallback_success": 1,
-    "fallback_recovery_latency_ms": 6,
-    "primary_attempts": 3,
-    "fallback_attempts": 1,
-    "duplicate_side_effects": 0,
-    "isolated_successes": 1,
-    "isolated_failures": 1,
-    "timeout_bounded": 1,
-    "cancellation_probe_completed": 1,
-    "cancellation_propagated": 0
+    "fallback_recovery_latency_ms": 7,
+    "logical_attempts": 2,
+    "primary_http_requests": 3,
+    "fallback_http_requests": 1,
+    "fallback_duplicate_requests": 0
   },
   "limitations": [
     "synthetic HTTP failures only",
-    "side effects represented by request counts",
-    "pinned QwenPaw coroutine cancellation does not propagate an MCP cancellation notification"
+    "HTTP request counts include protocol retries; logical attempts count failover legs",
+    "duplicate-request metric covers the successful fallback endpoint only"
   ]
 }

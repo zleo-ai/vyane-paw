@@ -252,19 +252,21 @@ async def history_count(client: Any, status: str) -> int:
     return len(payload.get("items", []))
 
 
-async def wait_for_history_growth(
+async def wait_for_cancel_probe_outcome(
     client: Any,
-    status: str,
-    previous: int,
+    success_count: int,
+    cancelled_count: int,
     *,
     timeout: float = 7,
-) -> None:
+) -> int:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if await history_count(client, status) > previous:
-            return
+        if await history_count(client, "cancelled") > cancelled_count:
+            return 1
+        if await history_count(client, "success") > success_count:
+            return 0
         await asyncio.sleep(0.05)
-    raise AssertionError(f"{status} history did not grow")
+    raise AssertionError("cancel probe produced no terminal history record")
 
 
 def evidence(
@@ -401,14 +403,50 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                     raise AssertionError("failover did not record two attempts")
                 if not attempts[0]["outcome"].get("failed_over"):
                     raise AssertionError("primary failure was not marked failed over")
-                primary_attempts = states["primary"].requests
-                fallback_attempts = states["backup"].requests
-                duplicate_side_effects = max(0, fallback_attempts - 1)
-                if primary_attempts < 1 or fallback_attempts != 1:
+                primary_http_requests = states["primary"].requests
+                fallback_http_requests = states["backup"].requests
+                fallback_duplicate_requests = max(
+                    0,
+                    fallback_http_requests - 1,
+                )
+                if primary_http_requests < 1 or fallback_http_requests != 1:
                     raise AssertionError(
                         "failover endpoint request counts were unexpected",
                     )
+                documents.append(
+                    evidence(
+                        args,
+                        "failover",
+                        failover_started_at,
+                        failover_started,
+                        {
+                            "fallback_success": 1,
+                            "fallback_recovery_latency_ms": (
+                                fallback_recovery_latency_ms
+                            ),
+                            "logical_attempts": len(attempts),
+                            "primary_http_requests": primary_http_requests,
+                            "fallback_http_requests": fallback_http_requests,
+                            "fallback_duplicate_requests": (
+                                fallback_duplicate_requests
+                            ),
+                        },
+                        [
+                            "synthetic HTTP failures only",
+                            (
+                                "HTTP request counts include protocol retries; "
+                                "logical attempts count failover legs"
+                            ),
+                            (
+                                "duplicate-request metric covers the successful "
+                                "fallback endpoint only"
+                            ),
+                        ],
+                    ),
+                )
 
+                isolation_started_at = datetime.now(UTC)
+                isolation_started = time.monotonic()
                 isolation = result_payload(
                     await client.call_tool(
                         "vyane_broadcast",
@@ -443,7 +481,21 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                     raise AssertionError(
                         f"unexpected isolation statuses: {statuses!r}",
                     )
+                documents.append(
+                    evidence(
+                        args,
+                        "failure_isolation",
+                        isolation_started_at,
+                        isolation_started,
+                        {
+                            "isolated_successes": isolated_successes,
+                            "isolated_failures": isolated_failures,
+                        },
+                        ["synthetic HTTP failure and response"],
+                    ),
+                )
 
+                timeout_started_at = datetime.now(UTC)
                 timeout_started = time.monotonic()
                 timed_out = result_payload(
                     await client.call_tool(
@@ -474,10 +526,36 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                         f"unexpected timeout result: {projection!r}",
                     )
                 await wait_for_history(client, "timeout")
+                timeout_bound_ms = 2500
+                timeout_bounded = int(
+                    timeout_duration_ms < timeout_bound_ms,
+                )
+                if not timeout_bounded:
+                    raise AssertionError("timeout exceeded the fixture bound")
+                documents.append(
+                    evidence(
+                        args,
+                        "timeout",
+                        timeout_started_at,
+                        timeout_started,
+                        {
+                            "timeout_recorded": 1,
+                            "timeout_duration_ms": timeout_duration_ms,
+                            "timeout_bound_ms": timeout_bound_ms,
+                        },
+                        ["synthetic five-second endpoint with one-second timeout"],
+                    ),
+                )
 
+                cancellation_started_at = datetime.now(UTC)
+                cancellation_started = time.monotonic()
                 successes_before_cancel = await history_count(
                     client,
                     "success",
+                )
+                cancelled_before_cancel = await history_count(
+                    client,
+                    "cancelled",
                 )
                 cancel_task = asyncio.create_task(
                     client.call_tool(
@@ -501,43 +579,32 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                     pass
                 else:
                     raise AssertionError("cancelled call returned normally")
-                await wait_for_history_growth(
+                cancellation_propagated = await wait_for_cancel_probe_outcome(
                     client,
-                    "success",
                     successes_before_cancel,
+                    cancelled_before_cancel,
                 )
-                cancelled_runs = await history_count(client, "cancelled")
-
+                cancellation_limitations = (
+                    []
+                    if cancellation_propagated
+                    else [
+                        (
+                            "pinned QwenPaw coroutine cancellation does not "
+                            "propagate an MCP cancellation notification"
+                        ),
+                    ]
+                )
                 documents.append(
                     evidence(
                         args,
-                        "failover",
-                        failover_started_at,
-                        failover_started,
+                        "cancellation",
+                        cancellation_started_at,
+                        cancellation_started,
                         {
-                            "fallback_success": 1,
-                            "fallback_recovery_latency_ms": (
-                                fallback_recovery_latency_ms
-                            ),
-                            "primary_attempts": primary_attempts,
-                            "fallback_attempts": fallback_attempts,
-                            "duplicate_side_effects": duplicate_side_effects,
-                            "isolated_successes": isolated_successes,
-                            "isolated_failures": isolated_failures,
-                            "timeout_bounded": int(timeout_duration_ms < 2500),
                             "cancellation_probe_completed": 1,
-                            "cancellation_propagated": int(
-                                cancelled_runs > 0,
-                            ),
+                            "cancellation_propagated": cancellation_propagated,
                         },
-                        [
-                            "synthetic HTTP failures only",
-                            "side effects represented by request counts",
-                            (
-                                "pinned QwenPaw coroutine cancellation does "
-                                "not propagate an MCP cancellation notification"
-                            ),
-                        ],
+                        cancellation_limitations,
                     ),
                 )
 

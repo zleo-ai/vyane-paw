@@ -41,7 +41,25 @@ uv run \
   --schemafile "$repo_root/schemas/evidence.schema.json" \
   "$evidence_dir"/*.json
 
-for scenario in route failover broadcast; do
+evidence_count="$(
+  find "$evidence_dir" \
+    -maxdepth 1 \
+    -type f \
+    -name 'vp02-*.json' |
+    wc -l
+)"
+if [[ "$evidence_count" -ne 6 ]]; then
+  echo "expected exactly six VP-02 evidence files, found $evidence_count" >&2
+  exit 1
+fi
+
+for scenario in \
+  route \
+  failover \
+  failure_isolation \
+  timeout \
+  cancellation \
+  broadcast; do
   jq -e \
     --arg scenario "$scenario" \
     '.scenario == $scenario and .result == "passed"' \

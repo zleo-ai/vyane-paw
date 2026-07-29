@@ -1,9 +1,9 @@
 {
   "schema_version": "0.1.0",
-  "scenario": "broadcast",
+  "scenario": "failure_isolation",
   "sanitization_state": "sanitized",
-  "started_at": "2026-07-29T12:47:02.434922+00:00",
-  "duration_ms": 257,
+  "started_at": "2026-07-29T12:46:56.092636+00:00",
+  "duration_ms": 258,
   "upstream_revisions": {
     "qwenpaw": "ebb5b24d0b2559af51d71a38547d88d384357a64",
     "vyane_rs": "4848ec4f9d0b740fd8dc5f5586bc30111dc3d373",
@@ -12,12 +12,10 @@
   },
   "result": "passed",
   "metrics": {
-    "independent_valid_responses": 2,
-    "max_observed_concurrency": 2,
-    "operator_interventions": 0
+    "isolated_successes": 1,
+    "isolated_failures": 1
   },
   "limitations": [
-    "synthetic responses, not semantic model review",
-    "cost proxy omitted because no paid model was called"
+    "synthetic HTTP failure and response"
   ]
 }
