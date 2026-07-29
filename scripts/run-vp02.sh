@@ -53,6 +53,21 @@ if [[ "$evidence_count" -ne 6 ]]; then
   exit 1
 fi
 
+ordered_evidence=(
+  "$evidence_dir/vp02-route.json"
+  "$evidence_dir/vp02-failover.json"
+  "$evidence_dir/vp02-failure_isolation.json"
+  "$evidence_dir/vp02-timeout.json"
+  "$evidence_dir/vp02-cancellation.json"
+  "$evidence_dir/vp02-broadcast.json"
+)
+jq -es \
+  'map(.started_at) as $times
+   | ($times == ($times | sort))
+     and (($times | unique | length) == 6)' \
+  "${ordered_evidence[@]}" \
+  >/dev/null
+
 for scenario in \
   route \
   failover \
