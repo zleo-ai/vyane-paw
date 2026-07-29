@@ -13,12 +13,23 @@ The first proof uses the revisions in `upstreams.lock.json`:
 `rmcp` 3.0 is an enabling upgrade, not proof that every MCP 2026-07-28 feature is
 implemented by Vyane Paw.
 
-## Compatibility hypothesis
+## Verified compatibility boundary
 
-The direct connection is expected to work because the server SDK keeps legacy
-initialization compatibility while adding the 2026-07-28 protocol surface.
-VP-01 must prove this across the real Python client and Rust server. No document
-may label the pair compatible until that test passes at pinned revisions.
+The direct stdio connection passed locally on 2026-07-29 at the pinned
+revisions. The QwenPaw client completed its stateful initialization lifecycle
+against the `rmcp` 3.0 server, discovered the exact nine-tool surface, completed
+one safe call, received a structured invalid-argument response, and closed
+cleanly.
+
+The executable smoke test is `scripts/run-vp01.sh`. It loads the pinned,
+unmodified QwenPaw `StdIOStatefulClient` module with QwenPaw-compatible Python
+MCP dependency constraints, launches the pinned Vyane binary, asserts the exact
+tool set, performs one safe call and one invalid-argument call, then verifies
+clean lifecycle shutdown. It intentionally does not claim full QwenPaw
+application integration.
+
+The sanitized baseline is `evidence/vp01-baseline.json`. CI and independent
+review remain required before VP-01 is marked complete.
 
 ## Validation matrix
 
