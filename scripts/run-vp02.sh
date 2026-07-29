@@ -61,12 +61,16 @@ ordered_evidence=(
   "$evidence_dir/vp02-cancellation.json"
   "$evidence_dir/vp02-broadcast.json"
 )
-jq -es \
+if ! jq -es \
   'map(.started_at) as $times
-   | ($times == ($times | sort))
+   | (all($times[]; type == "string" and length > 0))
+     and ($times == ($times | sort))
      and (($times | unique | length) == 6)' \
   "${ordered_evidence[@]}" \
-  >/dev/null
+  >/dev/null; then
+  echo "VP-02 evidence timestamps are missing, duplicated, or out of order" >&2
+  exit 1
+fi
 
 for scenario in \
   route \
