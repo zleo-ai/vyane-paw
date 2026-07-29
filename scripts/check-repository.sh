@@ -4,14 +4,17 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-bash -n scripts/*.sh
+bash -n bin/* scripts/*.sh
 
 for file in upstreams.lock.json schemas/*.json config/examples/*.json evidence/*.json; do
   jq empty "$file"
 done
 
-uv run --project compat --locked ruff check compat/*.py
-uv run --project compat --locked ruff format --check compat/*.py
+uv run --project compat --locked ruff check compat/*.py qwenpaw-plugin/plugin.py
+uv run --project compat --locked ruff format --check \
+  compat/*.py qwenpaw-plugin/plugin.py
+uv run --project compat --locked python compat/plugin_contract.py
+./scripts/test-product-entry.sh
 uv run --project compat --locked check-jsonschema \
   --schemafile schemas/evidence.schema.json \
   evidence/*.json

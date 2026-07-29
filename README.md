@@ -36,11 +36,20 @@ Vyane implementation.
 - `schemas/` — sanitized policy and evidence contracts
 - `upstreams.lock.json` — exact upstream revisions used by the compatibility gate
 
-## Start today
+## Product entry
 
-1. Run the completed `VP-01` pinned stdio compatibility gate.
-2. Run the hermetic `VP-02` route, failover, and broadcast fixtures.
-3. Close the verified QwenPaw cancellation-propagation gap before claiming
-   server-side cancellation from the product integration.
+The installable bundle under `qwenpaw-plugin/` registers one `/vyane` command
+with route, automatic dispatch, named-profile failover, and bounded multi-model
+review modes. The standard QwenPaw MCP import in `config/examples/` connects
+that product entry to the validated `vyane-paw-mcp` stdio launcher without
+putting provider credentials in this repository.
+
+Run `scripts/run-vp03.sh` to reproduce the pinned compatibility gate, all
+synthetic product flows, the plugin contract, and the launcher boundary.
+
+Local QwenPaw coroutine cancellation is not server-side Vyane cancellation at
+the pinned MCP Python SDK revision. The MVP uses finite execution timeouts and
+reports that limitation explicitly instead of carrying a private SDK monkey
+patch.
 
 See [README.zh-CN.md](README.zh-CN.md) for the Chinese overview.

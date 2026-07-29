@@ -1,0 +1,27 @@
+{
+  "schema_version": "0.1.0",
+  "scenario": "product_entry",
+  "sanitization_state": "sanitized",
+  "started_at": "2026-07-29T13:50:11.620765+00:00",
+  "duration_ms": 63,
+  "upstream_revisions": {
+    "qwenpaw": "ebb5b24d0b2559af51d71a38547d88d384357a64",
+    "vyane_rs": "4848ec4f9d0b740fd8dc5f5586bc30111dc3d373",
+    "rmcp": "3.0.0",
+    "python_mcp": "1.29.0"
+  },
+  "result": "passed",
+  "metrics": {
+    "registered_commands": 1,
+    "registered_skills": 1,
+    "validated_product_modes": 4,
+    "allowlisted_mcp_tools": 3,
+    "pinned_runtime_contracts": 6,
+    "fixed_private_paths": 0
+  },
+  "limitations": [
+    "pinned QwenPaw APIs are verified structurally, not through a full UI session",
+    "synthetic commands only; no paid model invocation",
+    "MCP DriverCard import remains a separate operator step"
+  ]
+}

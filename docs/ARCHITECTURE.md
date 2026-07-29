@@ -37,6 +37,29 @@ uses process isolation and avoids another network listener.
 The integration must not parse terminal prose. It should use MCP tool inputs and
 structured results only.
 
+## QwenPaw product entry
+
+The first product entry is intentionally split across two supported QwenPaw
+extension surfaces:
+
+1. A bundle plugin registers the `/vyane` slash command and the `vyane-paw`
+   Skill.
+2. A standard `mcpServers` import registers the local stdio MCP DriverCard.
+
+The slash command does not execute a subprocess and does not mutate QwenPaw
+configuration. It parses a bounded product mode, injects a current-turn
+contract, and lets the QwenPaw agent call the allowlisted Vyane MCP tool.
+
+The MCP client uses the `vyane-paw-mcp` launcher. The launcher resolves the
+Vyane executable and configuration from deployment-owned environment variables,
+validates them without printing their values, and then replaces itself with
+`vyane --config <file> mcp`.
+
+QwenPaw's public plugin API at the pinned revision exposes slash-command and
+Skill-provider registration but no MCP DriverCard registration. Keeping the
+standard MCP import separate avoids coupling this repository to internal card
+storage or application services.
+
 ## Why no gateway in phase one
 
 Both sides already implement MCP. A gateway would add lifecycle, deployment,

@@ -1,0 +1,25 @@
+{
+  "id": "vyane-paw",
+  "name": {
+    "zh-CN": "Vyane Paw",
+    "en-US": "Vyane Paw"
+  },
+  "version": "0.1.0",
+  "type": "general",
+  "description": {
+    "zh-CN": "在 QwenPaw 中提供安全、可解释的 Vyane 路由、失败切换和多模型评审入口。",
+    "en-US": "Safe, explainable Vyane routing, failover, and multi-model review entry points for QwenPaw."
+  },
+  "author": "Vyane Paw",
+  "entry": {
+    "backend": "plugin.py"
+  },
+  "dependencies": [],
+  "qwenpaw_version": {
+    "min": "2.1.0b1",
+    "max": "2.2.0"
+  },
+  "meta": {
+    "mcp_client": "vyane-paw"
+  }
+}

@@ -354,6 +354,8 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
 
                 route_started_at = datetime.now(UTC)
                 route_started = time.monotonic()
+                # vyane_route is a non-executing preview and has no sandbox
+                # argument; allow_frontier is its applicable safety guard.
                 route = result_payload(
                     await client.call_tool(
                         "vyane_route",
@@ -361,6 +363,7 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                             "task": SYNTHETIC_TASK,
                             "stage": "review",
                             "candidates": ["economy", "reviewer"],
+                            "allow_frontier": False,
                         },
                     ),
                 )
@@ -390,6 +393,8 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                         {
                             "task": SYNTHETIC_TASK,
                             "target": "resilient",
+                            "allow_frontier": False,
+                            "sandbox": "read_only",
                             "timeout_secs": 5,
                         },
                     ),
@@ -616,6 +621,7 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                         {
                             "task": SYNTHETIC_TASK,
                             "targets": "review-a,review-b",
+                            "sandbox": "read_only",
                             "timeout_secs": 5,
                         },
                     ),

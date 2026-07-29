@@ -38,3 +38,23 @@ QwenPaw fork，也不是另一套 Vyane 重构。
 或付费模型，即可复验确定性路由、失败切换、并行广播、单目标故障隔离与超时。
 测试也确认了一个边界：直接取消 QwenPaw 的本地 `call_tool` 协程目前不会传播
 MCP cancellation notification，因此不能宣称服务端 run 已取消。
+
+## 产品入口（开发中）
+
+`qwenpaw-plugin/` 已提供不修改 QwenPaw 内核的 bundle 插件：
+
+- `/vyane route <任务>`：只做确定性路由预览；
+- `/vyane dispatch <任务>`：使用安全默认值自动路由并执行；
+- `/vyane failover <profile> -- <任务>`：使用该 profile 已声明的失败切换链；
+- `/vyane review <profile-a,profile-b> -- <任务>`：对二至四个目标做一次并行评审。
+
+安装时保持 QwenPaw 离线：
+
+```bash
+install -m 0755 bin/vyane-paw-mcp "$HOME/.local/bin/vyane-paw-mcp"
+qwenpaw plugin install /path/to/vyane-paw/qwenpaw-plugin
+```
+
+随后将 `config/examples/qwenpaw-mcp.example.json` 中的示例配置路径替换为
+部署环境里的 Vyane 配置文件，并在 QwenPaw Console 的“智能体 → MCP”页面导入。
+配置只允许产品所需工具，不包含模型凭据；Vyane provider 凭据继续由部署环境提供。
