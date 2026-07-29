@@ -354,6 +354,8 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
 
                 route_started_at = datetime.now(UTC)
                 route_started = time.monotonic()
+                # vyane_route is a non-executing preview and has no sandbox
+                # argument; allow_frontier is its applicable safety guard.
                 route = result_payload(
                     await client.call_tool(
                         "vyane_route",

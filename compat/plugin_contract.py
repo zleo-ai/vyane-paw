@@ -50,6 +50,8 @@ def load_qwenpaw_manifest_type(path: Path) -> Any:
 
 
 def method_parameters(path: Path, class_name: str, method_name: str) -> set[str]:
+    if not path.is_file():
+        raise AssertionError(f"pinned QwenPaw source is missing: {path.name}")
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     for node in tree.body:
         if isinstance(node, ast.ClassDef) and node.name == class_name:
@@ -64,13 +66,17 @@ def method_parameters(path: Path, class_name: str, method_name: str) -> set[str]
     raise AssertionError(f"{class_name}.{method_name} is missing from {path}")
 
 
-def assert_pinned_qwenpaw_api(architecture_path: Path) -> None:
+def assert_pinned_qwenpaw_api(architecture_path: Path) -> int:
     qwenpaw_dir = architecture_path.parent.parent
     api_path = qwenpaw_dir / "plugins" / "api.py"
     hooks_path = qwenpaw_dir / "runtime" / "hooks.py"
     runtime_path = qwenpaw_dir / "runtime" / "runtime.py"
     builtin_path = qwenpaw_dir / "runtime" / "builtin_commands.py"
+    for path in (api_path, hooks_path, runtime_path, builtin_path):
+        if not path.is_file():
+            raise AssertionError(f"pinned QwenPaw source is missing: {path.name}")
 
+    verified = 0
     slash = method_parameters(api_path, "PluginApi", "register_slash_command")
     if not {
         "name",
@@ -81,22 +87,28 @@ def assert_pinned_qwenpaw_api(architecture_path: Path) -> None:
         "metadata",
     }.issubset(slash):
         raise AssertionError("pinned slash-command API is incompatible")
+    verified += 1
     skills = method_parameters(api_path, "PluginApi", "register_skill_provider")
     if not {"skills_dir", "enabled_by_default", "channels"}.issubset(skills):
         raise AssertionError("pinned Skill-provider API is incompatible")
+    verified += 1
     injection = method_parameters(hooks_path, "HookContext", "inject_context")
     if not {"content", "priority", "source"}.issubset(injection):
         raise AssertionError("pinned context-injection API is incompatible")
+    verified += 1
 
     runtime_source = runtime_path.read_text(encoding="utf-8")
-    if (
-        "cmd_msg = await cmd_registry.dispatch" not in runtime_source
-        or "if cmd_msg is not None:" not in runtime_source
-    ):
+    if "cmd_msg = await cmd_registry.dispatch" not in runtime_source:
+        raise AssertionError("pinned slash-command dispatch semantics drifted")
+    verified += 1
+    if "if cmd_msg is not None:" not in runtime_source:
         raise AssertionError("pinned slash-command return semantics drifted")
+    verified += 1
     builtin_source = builtin_path.read_text(encoding="utf-8")
     if 'TextBlock(type="text", text=text)' not in builtin_source:
         raise AssertionError("pinned QwenPaw message construction drifted")
+    verified += 1
+    return verified
 
 
 class FakeApi:
@@ -119,7 +131,7 @@ class FakeContext:
         self.injections.append((content, kwargs))
 
 
-def assert_manifest(qwenpaw_architecture: Path | None) -> None:
+def assert_manifest(qwenpaw_architecture: Path | None) -> int:
     manifest = json.loads((PLUGIN_DIR / "plugin.json").read_text(encoding="utf-8"))
     if manifest["id"] != "vyane-paw":
         raise AssertionError("unexpected plugin id")
@@ -136,10 +148,13 @@ def assert_manifest(qwenpaw_architecture: Path | None) -> None:
         )
         if parsed.id != "vyane-paw" or parsed.entry.backend != "plugin.py":
             raise AssertionError("pinned QwenPaw rejected the plugin manifest")
-        assert_pinned_qwenpaw_api(qwenpaw_architecture)
+        runtime_contracts = assert_pinned_qwenpaw_api(qwenpaw_architecture)
+    else:
+        runtime_contracts = 0
     skill = PLUGIN_DIR / "skills" / "vyane-paw" / "SKILL.md"
     if not skill.is_file():
         raise AssertionError("plugin Skill is missing")
+    return runtime_contracts
 
 
 async def assert_command_contract(module: Any) -> None:
@@ -191,6 +206,25 @@ async def assert_command_contract(module: Any) -> None:
         }[mode]
         if expected_tool not in content:
             raise AssertionError(f"{mode} did not bind the expected MCP tool")
+        expected_safety = {
+            "route": ("allow_frontier=false",),
+            "dispatch": (
+                "allow_frontier=false",
+                "sandbox=read_only",
+                "timeout_secs=120",
+            ),
+            "failover": (
+                "allow_frontier=false",
+                "sandbox=read_only",
+                "timeout_secs=120",
+            ),
+            "review": ("sandbox=read_only", "timeout_secs=120"),
+        }[mode]
+        for safety_token in expected_safety:
+            if safety_token not in content:
+                raise AssertionError(
+                    f"{mode} lost safe argument {safety_token}",
+                )
         if metadata != {"priority": 20, "source": "plugin:vyane-paw"}:
             raise AssertionError("unexpected context injection metadata")
 
@@ -230,7 +264,7 @@ def assert_mcp_import() -> int:
     if client["command"] != "vyane-paw-mcp":
         raise AssertionError("MCP import bypasses the validated launcher")
     required = {"vyane_route", "vyane_dispatch", "vyane_broadcast"}
-    if set(client["tools"]) != required:
+    if sorted(client["tools"]) != sorted(required):
         raise AssertionError("MCP allowlist exceeds the product tool surface")
     env = client.get("env", {})
     if set(env) != {"VYANE_PAW_CONFIG"}:
@@ -253,7 +287,7 @@ def main() -> None:
         raise FileNotFoundError(args.qwenpaw_architecture)
     started_at = datetime.now(UTC)
     started = time.monotonic()
-    assert_manifest(args.qwenpaw_architecture)
+    runtime_contracts = assert_manifest(args.qwenpaw_architecture)
     module = load_plugin_module()
     asyncio.run(assert_command_contract(module))
     assert_launcher()
@@ -279,9 +313,7 @@ def main() -> None:
                 "registered_skills": 1,
                 "validated_product_modes": 4,
                 "allowlisted_mcp_tools": allowlisted_tools,
-                "pinned_runtime_contracts": (
-                    6 if args.qwenpaw_architecture is not None else 0
-                ),
+                "pinned_runtime_contracts": runtime_contracts,
                 "fixed_private_paths": 0,
             },
             "limitations": [

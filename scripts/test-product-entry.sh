@@ -59,6 +59,7 @@ fi
 
 mkdir "$test_root/bin"
 cp "$fake_vyane" "$test_root/bin/vyane"
+: >"$capture_path"
 PATH="$test_root/bin:$PATH" \
 VYANE_PAW_CONFIG="$config_path" \
 VYANE_PAW_VYANE_BIN="vyane" \
