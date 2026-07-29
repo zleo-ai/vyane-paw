@@ -1,0 +1,26 @@
+{
+  "schema_version": "0.1.0",
+  "scenario": "compatibility",
+  "sanitization_state": "sanitized",
+  "started_at": "2026-07-29T11:13:42.409552+00:00",
+  "duration_ms": 147,
+  "upstream_revisions": {
+    "qwenpaw": "ebb5b24d0b2559af51d71a38547d88d384357a64",
+    "vyane_rs": "4848ec4f9d0b740fd8dc5f5586bc30111dc3d373",
+    "rmcp": "3.0.0",
+    "python_mcp": "1.29.0"
+  },
+  "result": "passed",
+  "metrics": {
+    "discovered_tools": 9,
+    "successful_calls": 1,
+    "rejected_invalid_calls": 1,
+    "server_exit_code": 0,
+    "server_process_reaped": 1
+  },
+  "limitations": [
+    "stdio transport only",
+    "isolated QwenPaw MCP client module, not the full QwenPaw application",
+    "no provider or model invocation"
+  ]
+}

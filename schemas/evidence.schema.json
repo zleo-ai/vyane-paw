@@ -65,5 +65,40 @@
         "type": "string"
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scenario": {
+            "const": "compatibility"
+          }
+        },
+        "required": [
+          "scenario"
+        ]
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "required": [
+              "server_exit_code",
+              "server_process_reaped"
+            ],
+            "properties": {
+              "server_exit_code": {
+                "const": 0
+              },
+              "server_process_reaped": {
+                "const": 1
+              }
+            }
+          }
+        },
+        "required": [
+          "metrics"
+        ]
+      }
+    }
+  ]
 }

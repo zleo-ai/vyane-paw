@@ -1,0 +1,11 @@
+{
+  "schema_version": "0.1.0",
+  "profile": "demo-safe",
+  "allowed_tools": [
+    "vyane_route",
+    "vyane_sessions"
+  ],
+  "allow_failover": false,
+  "allow_broadcast": false,
+  "max_parallel_targets": 1
+}

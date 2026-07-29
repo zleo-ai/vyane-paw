@@ -39,5 +39,8 @@ or mirror either upstream runtime.
   present.
 - Implementation, test, and independent review should be separated for changes
   that affect execution authority or security.
+- Independent model review defaults to GLM-5.2 through an official subscription
+  plan. Local profile names and credentials are deployment-specific and must
+  not be committed. Do not silently substitute a relay or another model.
 - Keep the repository private until the product boundary and disclosure plan
   have been reviewed explicitly.

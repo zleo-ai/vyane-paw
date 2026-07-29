@@ -30,6 +30,7 @@ QwenPaw fork，也不是另一套 Vyane 重构。
 
 ## 今天就能启动
 
-先执行 [VP-01](work-packages/VP-01.md)：用未修改的 QwenPaw MCP 客户端连接
-固定版本的 `vyane-rs` stdio MCP server，跑通初始化、工具发现和一次无敏感数据的
-工具调用，并留下可复验结果。通过后再进入三类演示场景，不先写额外网关。
+[VP-01](work-packages/VP-01.md) 的本地跨语言 smoke 已通过：未修改的 QwenPaw
+MCP 客户端能够连接固定版本的 `vyane-rs` stdio MCP server，完成初始化、精确
+9 工具发现、安全调用、非法参数拒绝和干净退出。当前继续等待 self-hosted CI
+复验与独立审查；通过后进入三类演示场景，不先写额外网关。

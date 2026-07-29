@@ -13,19 +13,36 @@ The first proof uses the revisions in `upstreams.lock.json`:
 `rmcp` 3.0 is an enabling upgrade, not proof that every MCP 2026-07-28 feature is
 implemented by Vyane Paw.
 
-## Compatibility hypothesis
+## Verified compatibility boundary
 
-The direct connection is expected to work because the server SDK keeps legacy
-initialization compatibility while adding the 2026-07-28 protocol surface.
-VP-01 must prove this across the real Python client and Rust server. No document
-may label the pair compatible until that test passes at pinned revisions.
+The direct stdio connection passed locally and in self-hosted CI on 2026-07-29
+at the pinned revisions. The QwenPaw client completed its stateful
+initialization lifecycle against the `rmcp` 3.0 server, discovered the exact
+nine-tool surface, completed one safe call, received a structured
+invalid-argument response, and closed cleanly.
+
+The executable smoke test is `scripts/run-vp01.sh`. It loads the pinned,
+unmodified QwenPaw `StdIOStatefulClient` module with QwenPaw-compatible Python
+MCP dependency constraints, launches the pinned Vyane binary, asserts the exact
+tool set, performs one safe call and one invalid-argument call, then verifies
+clean lifecycle shutdown. It intentionally does not claim full QwenPaw
+application integration.
+
+The sanitized baseline is `evidence/vp01-baseline.json`. VP-01 is complete
+after self-hosted CI and an independent GLM-5.2 review through the official GLM
+Coding Plan both passed.
+
+The smoke reads the resolved `rmcp` version from the pinned `vyane-rs`
+`Cargo.lock` and rejects any mismatch with `upstreams.lock.json`. Python
+compatibility dependencies are exact fixture versions rather than production
+application constraints.
 
 ## Validation matrix
 
 | Capability | Phase 1 expectation | Evidence |
 | --- | --- | --- |
-| Process launch and clean shutdown | Required | exit status and bounded log |
-| Legacy initialize handshake | Required | sanitized transcript |
+| Process launch and clean shutdown | Required | exit code and reaped-process assertion |
+| Legacy initialize handshake | Required | completed pinned-client smoke |
 | Tool discovery | Required | expected tool-name set |
 | One tool call | Required | request/result fixture |
 | Error propagation | Required | deterministic negative fixture |
