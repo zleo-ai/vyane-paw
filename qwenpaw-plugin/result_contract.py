@@ -42,6 +42,7 @@ def _broadcast_outcome(items: Any) -> str:
         return "unknown"
     successes = 0
     failures = 0
+    unknown = 0
     for item in items:
         if not isinstance(item, Mapping):
             failures += 1
@@ -51,10 +52,14 @@ def _broadcast_outcome(items: Any) -> str:
             outcome = _record_outcome(item.get("record") or item.get("receipt"))
             if outcome == "success":
                 successes += 1
-            else:
+            elif outcome == "failure":
                 failures += 1
+            else:
+                unknown += 1
         else:
-            failures += 1
+            unknown += 1
+    if unknown:
+        return "unknown"
     if successes and failures:
         return "partial"
     if successes:
@@ -68,6 +73,136 @@ def _completed_outcome(tool: str, payload: Mapping[str, Any]) -> str:
     if tool == "vyane_broadcast":
         return _broadcast_outcome(payload.get("items"))
     return _record_outcome(payload.get("record") or payload.get("receipt"))
+
+
+def _select(source: Mapping[str, Any], fields: tuple[str, ...]) -> dict[str, Any]:
+    return {field: source[field] for field in fields if field in source}
+
+
+def _project_attempt(attempt: Any) -> Any:
+    if not isinstance(attempt, Mapping):
+        return None
+    projected = _select(
+        attempt,
+        ("target", "transport", "started_at", "duration_ms"),
+    )
+    outcome = attempt.get("outcome")
+    if isinstance(outcome, Mapping):
+        projected["outcome"] = _select(
+            outcome,
+            ("result", "kind", "failed_over"),
+        )
+    return projected
+
+
+def _project_record(record: Any) -> Any:
+    if not isinstance(record, Mapping):
+        return None
+    projected = _select(
+        record,
+        (
+            "view_schema",
+            "run_id",
+            "started_at",
+            "finished_at",
+            "sandbox",
+            "target",
+            "transport",
+            "status",
+            "usage",
+            "cost_usd",
+            "session_attached",
+            "output_chars",
+            "terminal_error_kind",
+        ),
+    )
+    attempts = record.get("attempts")
+    if isinstance(attempts, list):
+        projected["attempts"] = [
+            item
+            for attempt in attempts
+            if (item := _project_attempt(attempt)) is not None
+        ]
+    return projected
+
+
+def _project_receipt(receipt: Any) -> Any:
+    if not isinstance(receipt, Mapping):
+        return None
+    return _select(
+        receipt,
+        (
+            "receipt_schema",
+            "run_id",
+            "run_status",
+            "terminal_error_kind",
+            "output_chars",
+        ),
+    )
+
+
+def _project_broadcast_item(item: Any) -> Any:
+    if not isinstance(item, Mapping):
+        return None
+    projected = _select(
+        item,
+        ("index", "target", "output", "status", "output_omitted"),
+    )
+    record = _project_record(item.get("record"))
+    if record is not None:
+        projected["record"] = record
+    receipt = _project_receipt(item.get("receipt"))
+    if receipt is not None:
+        projected["receipt"] = receipt
+    error = item.get("error")
+    if isinstance(error, Mapping):
+        projected["error"] = {"code": _safe_code(error.get("code"))}
+    return projected
+
+
+def _project_completed_payload(
+    tool: str,
+    payload: Mapping[str, Any],
+) -> dict[str, Any]:
+    if tool == "vyane_route":
+        return _select(
+            payload,
+            (
+                "profile",
+                "provider",
+                "model",
+                "tier",
+                "effort",
+                "intent",
+                "complexity_score",
+                "selection_basis",
+            ),
+        )
+    projected = _select(
+        payload,
+        (
+            "operation_status",
+            "output",
+            "output_omitted",
+            "detail_omitted",
+        ),
+    )
+    if tool == "vyane_dispatch":
+        record = _project_record(payload.get("record"))
+        if record is not None:
+            projected["record"] = record
+        receipt = _project_receipt(payload.get("receipt"))
+        if receipt is not None:
+            projected["receipt"] = receipt
+        return projected
+    items = payload.get("items")
+    if isinstance(items, list):
+        projected["items"] = [
+            item
+            for raw_item in items
+            if (item := _project_broadcast_item(raw_item)) is not None
+        ]
+    return projected
 
 
 def normalize_tool_payload(
@@ -134,7 +269,7 @@ def normalize_tool_payload(
         "outcome": _completed_outcome(tool, payload),
         "detail_state": "receipt" if detail_omitted else "full",
         "retry_guidance": "do_not_retry",
-        "data": dict(payload),
+        "data": _project_completed_payload(tool, payload),
     }
 
 
@@ -160,8 +295,15 @@ def protocol_failure(
 
 
 def payload_from_text_blocks(content: Iterable[Any]) -> Mapping[str, Any] | None:
-    """Select the last JSON object from an AgentScope tool response."""
+    """Select the most likely structured Vyane object from text blocks."""
     candidate: Mapping[str, Any] | None = None
+    candidate_score = 0
+    discriminator_keys = {
+        "operation_status",
+        "status",
+        "ok",
+        "profile",
+    }
     for block in content:
         text = (
             block.get("text")
@@ -175,5 +317,8 @@ def payload_from_text_blocks(content: Iterable[Any]) -> Mapping[str, Any] | None
         except json.JSONDecodeError:
             continue
         if isinstance(value, Mapping):
-            candidate = value
+            score = len(discriminator_keys.intersection(value))
+            if score >= candidate_score and score > 0:
+                candidate = value
+                candidate_score = score
     return candidate

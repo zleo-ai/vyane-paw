@@ -29,28 +29,54 @@ uv run --project compat --locked check-jsonschema \
   schemas/examples/*.result.json
 
 invalid_publishable="$(mktemp)"
+invalid_publishable_log="$(mktemp)"
 cleanup() {
-  rm -f -- "$invalid_publishable"
+  rm -f -- "$invalid_publishable" "$invalid_publishable_log"
 }
 trap cleanup EXIT
 jq '.sanitization_state = "publishable" | del(.publication_review)' \
   evidence/vp03-product-entry.json >"$invalid_publishable"
-if uv run --project compat --locked check-jsonschema \
+set +e
+uv run --project compat --locked check-jsonschema \
   --schemafile schemas/evidence.schema.json \
-  "$invalid_publishable" >/dev/null 2>&1; then
-  echo "Evidence became publishable without human review." >&2
-  exit 1
-fi
+  "$invalid_publishable" >"$invalid_publishable_log" 2>&1
+schema_status=$?
+set -e
+case "$schema_status" in
+  0)
+    echo "Evidence became publishable without human review." >&2
+    exit 1
+    ;;
+  1)
+    ;;
+  *)
+    cat "$invalid_publishable_log" >&2
+    echo "Negative evidence-schema check did not execute reliably." >&2
+    exit 1
+    ;;
+esac
 
-if rg -n \
+set +e
+rg -n \
   --glob '*.py' \
   --glob '*.sh' \
   --glob '!check-repository.sh' \
   'sanitization_state.*publishable' \
-  compat qwenpaw-plugin scripts; then
-  echo "A generator can mark evidence publishable." >&2
-  exit 1
-fi
+  compat qwenpaw-plugin scripts
+rg_status=$?
+set -e
+case "$rg_status" in
+  0)
+    echo "A generator can mark evidence publishable." >&2
+    exit 1
+    ;;
+  1)
+    ;;
+  *)
+    echo "Publishable-generator scan did not execute reliably." >&2
+    exit 1
+    ;;
+esac
 
 forbidden_tracked="$(
   git ls-files |

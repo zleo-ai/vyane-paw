@@ -4,6 +4,11 @@ Vyane Paw's policy, operation-result, and evidence documents are runtime
 contracts. Their `schema_version` values use semantic versioning independently
 from the plugin version.
 
+The current `0.1.0` schemas are pre-release development contracts and have not
+been published as a supported external interface. They may be tightened in
+place until the first compatibility baseline is tagged. After that tag, every
+change follows the compatibility and migration rules below.
+
 ## Compatibility rules
 
 - A patch release may clarify descriptions or tighten tests without changing

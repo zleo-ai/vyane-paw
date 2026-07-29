@@ -14,6 +14,7 @@ import sys
 import tempfile
 import time
 import types
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -162,76 +163,29 @@ class FakeContext:
         self.injections.append((content, kwargs))
 
 
-class FakeTextBlock(dict):
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
+def response_text(response: Any) -> str:
+    """Extract text without depending on a fake AgentScope message shape."""
+    parts: list[str] = []
+    for block in getattr(response, "content", []) or []:
+        text = (
+            block.get("text")
+            if isinstance(block, Mapping)
+            else getattr(block, "text", None)
+        )
+        if isinstance(text, str):
+            parts.append(text)
+    return "\n".join(parts)
 
 
-class FakeMsg(dict):
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-
-
-class FakeMiddlewareBase:
-    pass
-
-
-class FakeToolResponse:
-    def __init__(
-        self, content: list[Any], metadata: dict[str, Any] | None = None
-    ) -> None:
-        self.content = content
-        self.metadata = metadata
-
-
-def install_agentscope_message_fixture() -> dict[str, Any]:
-    previous = {
-        name: sys.modules.get(name) for name in ("agentscope", "agentscope.message")
-    }
-    package = types.ModuleType("agentscope")
-    package.__path__ = []
-    message = types.ModuleType("agentscope.message")
-    message.Msg = FakeMsg
-    message.TextBlock = FakeTextBlock
-    package.message = message
-    sys.modules["agentscope"] = package
-    sys.modules["agentscope.message"] = message
-    return previous
-
-
-def install_agentscope_runtime_fixture() -> dict[str, Any]:
-    names = (
-        "agentscope",
-        "agentscope.message",
-        "agentscope.middleware",
-        "agentscope.tool",
-    )
-    previous = {name: sys.modules.get(name) for name in names}
-    package = types.ModuleType("agentscope")
-    package.__path__ = []
-    message = types.ModuleType("agentscope.message")
-    message.Msg = FakeMsg
-    message.TextBlock = FakeTextBlock
-    middleware = types.ModuleType("agentscope.middleware")
-    middleware.MiddlewareBase = FakeMiddlewareBase
-    tool = types.ModuleType("agentscope.tool")
-    tool.ToolResponse = FakeToolResponse
-    package.message = message
-    package.middleware = middleware
-    package.tool = tool
-    sys.modules["agentscope"] = package
-    sys.modules["agentscope.message"] = message
-    sys.modules["agentscope.middleware"] = middleware
-    sys.modules["agentscope.tool"] = tool
-    return previous
-
-
-def restore_agentscope_message_fixture(previous: dict[str, Any]) -> None:
-    for name, module in previous.items():
-        if module is None:
-            sys.modules.pop(name, None)
-        else:
-            sys.modules[name] = module
+def assert_bounded_denial(response: Any, forbidden: Iterable[str]) -> None:
+    if response is None:
+        raise AssertionError("policy denial did not return a bounded response")
+    text = response_text(response)
+    if not text:
+        raise AssertionError("policy denial response has no text")
+    leaked = [value for value in forbidden if value and value in text]
+    if leaked:
+        raise AssertionError("policy denial exposed deployment-owned input")
 
 
 def assert_manifest(qwenpaw_architecture: Path | None) -> int:
@@ -315,6 +269,10 @@ async def assert_command_contract(module: Any) -> None:
             }
             for raw, (mode, selector) in cases.items():
                 ctx = FakeContext()
+                ctx.request.request_context = {
+                    "trace_marker": "preserved",
+                    "subagent_allowed_tools": ["must-be-replaced"],
+                }
                 response = await handler(ctx, raw)
                 if response is not None or len(ctx.injections) != 1:
                     raise AssertionError(
@@ -342,6 +300,7 @@ async def assert_command_contract(module: Any) -> None:
                         f"{mode} did not bind the expected MCP tool",
                     )
                 if ctx.request.request_context != {
+                    "trace_marker": "preserved",
                     "subagent_allowed_tools": [expected_tool],
                     "vyane_paw_result_contract": {
                         "tool": expected_tool,
@@ -428,7 +387,26 @@ async def assert_command_contract(module: Any) -> None:
 
 
 def assert_result_contract(module: Any) -> None:
+    from jsonschema.validators import validator_for
+
     contract = importlib.import_module(f"{module.__name__}.result_contract")
+    result_schema = json.loads(
+        (ROOT / "schemas" / "operation-result.schema.json").read_text(
+            encoding="utf-8",
+        ),
+    )
+    validator_class = validator_for(result_schema)
+    validator_class.check_schema(result_schema)
+    validator = validator_class(result_schema)
+
+    def assert_schema(instance: dict[str, Any]) -> None:
+        errors = sorted(validator.iter_errors(instance), key=lambda error: error.path)
+        if errors:
+            raise AssertionError(
+                "normalized result violates operation-result schema: "
+                + "; ".join(error.message for error in errors),
+            )
+
     cases = [
         (
             "vyane_route",
@@ -486,6 +464,7 @@ def assert_result_contract(module: Any) -> None:
             raise AssertionError(f"{mode} result normalization drifted")
         if normalized["retry_guidance"] != "do_not_retry":
             raise AssertionError(f"{mode} result became retryable")
+        assert_schema(normalized)
 
     rejected = contract.normalize_tool_payload(
         tool="vyane_dispatch",
@@ -503,6 +482,9 @@ def assert_result_contract(module: Any) -> None:
         raise AssertionError("safe Vyane rejection was not normalized")
     if rejected["error"] != {"code": "invalid_argument"}:
         raise AssertionError("raw upstream error crossed the result contract")
+    if "data" in rejected:
+        raise AssertionError("rejected result included completed data")
+    assert_schema(rejected)
 
     malformed = contract.normalize_tool_payload(
         tool="vyane_dispatch",
@@ -512,6 +494,7 @@ def assert_result_contract(module: Any) -> None:
     )
     if malformed["operation_status"] != "protocol_failure":
         raise AssertionError("unexpected operation status did not fail closed")
+    assert_schema(malformed)
 
     transport = contract.normalize_tool_payload(
         tool="vyane_dispatch",
@@ -529,6 +512,72 @@ def assert_result_contract(module: Any) -> None:
         raise AssertionError("driver failure code was not bounded")
     if "message" in transport:
         raise AssertionError("raw driver error crossed the result contract")
+    if "data" in transport:
+        raise AssertionError("transport failure included completed data")
+    assert_schema(transport)
+
+    raw_marker = "must-not-cross-contract"
+    projected = contract.normalize_tool_payload(
+        tool="vyane_broadcast",
+        mode="review",
+        policy_profile="contract-test",
+        payload={
+            "operation_status": "completed",
+            "items": [
+                {
+                    "index": 0,
+                    "target": "reviewer-a",
+                    "error": {
+                        "code": "unavailable",
+                        "message": raw_marker,
+                    },
+                },
+            ],
+            "detail_omitted": False,
+            "raw_error": raw_marker,
+        },
+    )
+    if projected["data"]["items"][0]["error"] != {"code": "unavailable"}:
+        raise AssertionError("broadcast error projection drifted")
+    if raw_marker in json.dumps(projected):
+        raise AssertionError("completed result exposed unbounded upstream data")
+    if "error" in projected:
+        raise AssertionError("completed result included envelope error")
+    assert_schema(projected)
+
+    unknown = contract.normalize_tool_payload(
+        tool="vyane_broadcast",
+        mode="review",
+        policy_profile="contract-test",
+        payload={
+            "operation_status": "completed",
+            "items": [
+                {"record": {"status": "success"}},
+                {"record": {"status": "future_status"}},
+            ],
+            "detail_omitted": False,
+        },
+    )
+    if unknown["outcome"] != "unknown":
+        raise AssertionError("unknown broadcast status did not fail closed")
+    assert_schema(unknown)
+
+    selected = contract.payload_from_text_blocks(
+        [
+            {
+                "type": "text",
+                "text": json.dumps(
+                    {
+                        "operation_status": "completed",
+                        "record": {"status": "success"},
+                    },
+                ),
+            },
+            {"type": "text", "text": json.dumps({"note": "unrelated"})},
+        ],
+    )
+    if selected is None or selected.get("operation_status") != "completed":
+        raise AssertionError("structured result selection drifted")
 
 
 def assert_policy_validation(module: Any) -> None:
@@ -563,79 +612,148 @@ def assert_policy_validation(module: Any) -> None:
             continue
         raise AssertionError("internally inconsistent policy was accepted")
 
+    policy = core.RuntimePolicy.from_mapping(
+        {
+            "schema_version": "0.1.0",
+            "profile": "strict",
+            "allowed_tools": ["vyane_route", "vyane_dispatch", "vyane_broadcast"],
+            "allow_failover": True,
+            "allow_broadcast": True,
+            "max_parallel_targets": 2,
+            "allowed_targets": ["reviewer-a", "reviewer-b"],
+        },
+    )
+    malformed_plans = [
+        {"mode": "route", "target": "reviewer-a"},
+        {"mode": "dispatch", "target": "reviewer-a"},
+        {"mode": "failover"},
+        {"mode": "failover", "target": "reviewer-c"},
+        {"mode": "review", "targets": ["reviewer-a", "reviewer-b"]},
+        {"mode": "review", "targets": "reviewer-a,reviewer-a"},
+        {"mode": "review", "targets": "reviewer-a,reviewer-c"},
+    ]
+    for plan in malformed_plans:
+        try:
+            policy.authorize(plan)
+        except core.PolicyError:
+            continue
+        raise AssertionError("malformed or unauthorized execution plan was accepted")
+
 
 async def assert_result_middleware(module: Any) -> None:
-    fixture = install_agentscope_runtime_fixture()
-    try:
-        ctx = FakeContext()
-        ctx.request.request_context = {
-            "vyane_paw_result_contract": {
-                "tool": "vyane_dispatch",
-                "mode": "dispatch",
-                "policy_profile": "contract-test",
-            },
-        }
-        middleware = module._result_middleware_factory(ctx, None)
-        if middleware is None:
-            raise AssertionError("result middleware factory returned None")
-        response = FakeToolResponse(
-            [
-                FakeTextBlock(
-                    type="text",
-                    text=json.dumps(
-                        {
-                            "operation_status": "completed",
-                            "record": {"status": "success"},
-                            "detail_omitted": False,
-                        },
-                    ),
+    from agentscope.message import TextBlock
+    from agentscope.middleware import MiddlewareBase
+    from agentscope.tool import ToolResponse
+
+    empty_ctx = FakeContext()
+    if module._result_middleware_factory(empty_ctx, None) is not None:
+        raise AssertionError("result middleware installed without a request contract")
+
+    ctx = FakeContext()
+    ctx.request.request_context = {
+        "vyane_paw_result_contract": {
+            "tool": "vyane_dispatch",
+            "mode": "dispatch",
+            "policy_profile": "contract-test",
+        },
+    }
+    middleware = module._result_middleware_factory(ctx, None)
+    if middleware is None:
+        raise AssertionError("result middleware factory returned None")
+    if not isinstance(middleware, MiddlewareBase):
+        raise AssertionError("result middleware does not implement AgentScope contract")
+    response = ToolResponse(
+        id="call-contract",
+        content=[
+            TextBlock(
+                type="text",
+                text=json.dumps(
+                    {
+                        "operation_status": "completed",
+                        "record": {"status": "success"},
+                        "detail_omitted": False,
+                    },
                 ),
-            ],
-            {"existing": "preserved"},
+            ),
+        ],
+        metadata={"existing": "preserved"},
+    )
+
+    async def next_handler():
+        yield response
+
+    tool_call = types.SimpleNamespace(name="vyane_dispatch")
+    events = [
+        event
+        async for event in middleware.on_acting(
+            None,
+            {"tool_call": tool_call},
+            next_handler,
         )
+    ]
+    if events != [response] or len(response.content) != 1:
+        raise AssertionError("result middleware changed event cardinality")
+    normalized = json.loads(response.content[0].text)
+    if normalized["operation_status"] != "completed":
+        raise AssertionError("result middleware did not normalize payload")
+    if response.metadata != {
+        "existing": "preserved",
+        "vyane_paw_result_schema": "0.1.0",
+        "vyane_paw_operation_status": "completed",
+    }:
+        raise AssertionError("result middleware metadata drifted")
 
-        async def next_handler():
-            yield response
+    passthrough = ToolResponse(
+        id="call-other",
+        content=[TextBlock(type="text", text="unchanged")],
+        metadata={"existing": "preserved"},
+    )
 
-        tool_call = types.SimpleNamespace(name="vyane_dispatch")
-        events = [
-            event
-            async for event in middleware.on_acting(
-                None,
-                {"tool_call": tool_call},
-                next_handler,
-            )
-        ]
-        if events != [response] or len(response.content) != 1:
-            raise AssertionError("result middleware changed event cardinality")
-        normalized = json.loads(response.content[0]["text"])
-        if normalized["operation_status"] != "completed":
-            raise AssertionError("result middleware did not normalize payload")
-        if response.metadata != {
-            "existing": "preserved",
-            "vyane_paw_result_schema": "0.1.0",
-            "vyane_paw_operation_status": "completed",
-        }:
-            raise AssertionError("result middleware metadata drifted")
-    finally:
-        restore_agentscope_message_fixture(fixture)
+    async def passthrough_handler():
+        yield passthrough
+
+    passthrough_events = [
+        event
+        async for event in middleware.on_acting(
+            None,
+            {"tool_call": types.SimpleNamespace(name="other_tool")},
+            passthrough_handler,
+        )
+    ]
+    if passthrough_events != [passthrough]:
+        raise AssertionError("result middleware changed unrelated tool events")
+    if passthrough.content[0].text != "unchanged" or passthrough.metadata != {
+        "existing": "preserved",
+    }:
+        raise AssertionError("result middleware mutated an unrelated tool result")
 
 
 async def assert_policy_enforcement(module: Any, handler: Any) -> None:
-    fixture = install_agentscope_message_fixture()
+    previous_policy = os.environ.pop("VYANE_PAW_POLICY", None)
     try:
-        os.environ.pop("VYANE_PAW_POLICY", None)
         default_route = FakeContext()
         if await handler(default_route, "route task") is not None:
             raise AssertionError("default policy denied route")
+        default_dispatch = FakeContext()
+        if await handler(default_dispatch, "dispatch task") is not None:
+            raise AssertionError("default policy denied automatic dispatch")
         default_failover = FakeContext()
         denied = await handler(default_failover, "failover resilient -- task")
         if (
-            denied is None
-            or default_failover.injections
+            default_failover.injections
             or default_failover.request.request_context is not None
         ):
-            raise AssertionError("default policy did not deny failover")
+            raise AssertionError("default policy mutated a denied failover request")
+        assert_bounded_denial(denied, ["resilient"])
+
+        default_review = FakeContext()
+        denied = await handler(default_review, "review reviewer-a,reviewer-b -- task")
+        if (
+            default_review.injections
+            or default_review.request.request_context is not None
+        ):
+            raise AssertionError("default policy mutated a denied review request")
+        assert_bounded_denial(denied, ["reviewer-a", "reviewer-b"])
 
         restrictive = {
             "schema_version": "0.1.0",
@@ -649,59 +767,95 @@ async def assert_policy_enforcement(module: Any, handler: Any) -> None:
             policy_path = Path(tmp) / "policy.json"
             policy_path.write_text(json.dumps(restrictive), encoding="utf-8")
             os.environ["VYANE_PAW_POLICY"] = str(policy_path)
-            try:
-                denied_route = FakeContext()
-                response = await handler(denied_route, "route task")
-                if (
-                    response is None
-                    or denied_route.injections
-                    or denied_route.request.request_context is not None
-                ):
-                    raise AssertionError("tool policy did not deny route")
 
-                too_many = FakeContext()
-                response = await handler(
-                    too_many,
-                    "review reviewer-a,reviewer-b,reviewer-c -- task",
+            denied_route = FakeContext()
+            response = await handler(denied_route, "route task")
+            if (
+                denied_route.injections
+                or denied_route.request.request_context is not None
+            ):
+                raise AssertionError("tool policy did not deny route")
+            assert_bounded_denial(response, [str(policy_path)])
+
+            too_many = FakeContext()
+            response = await handler(
+                too_many,
+                "review reviewer-a,reviewer-b,reviewer-c -- task",
+            )
+            if too_many.injections or too_many.request.request_context is not None:
+                raise AssertionError(
+                    "parallelism policy did not fail closed",
                 )
-                if (
-                    response is None
-                    or too_many.injections
-                    or too_many.request.request_context is not None
-                ):
-                    raise AssertionError(
-                        "parallelism policy did not fail closed",
-                    )
+            assert_bounded_denial(
+                response,
+                ["reviewer-a", "reviewer-b", "reviewer-c", str(policy_path)],
+            )
 
-                unknown_target = FakeContext()
-                response = await handler(
-                    unknown_target,
-                    "review reviewer-a,reviewer-c -- task",
+            unknown_target = FakeContext()
+            response = await handler(
+                unknown_target,
+                "review reviewer-a,reviewer-c -- task",
+            )
+            if (
+                unknown_target.injections
+                or unknown_target.request.request_context is not None
+            ):
+                raise AssertionError(
+                    "target policy did not fail closed",
                 )
-                if (
-                    response is None
-                    or unknown_target.injections
-                    or unknown_target.request.request_context is not None
-                ):
-                    raise AssertionError(
-                        "target policy did not fail closed",
-                    )
+            assert_bounded_denial(
+                response,
+                ["reviewer-a", "reviewer-c", str(policy_path)],
+            )
 
-                policy_path.write_text("{invalid", encoding="utf-8")
-                invalid_policy = FakeContext()
-                response = await handler(invalid_policy, "route task")
-                if (
-                    response is None
-                    or invalid_policy.injections
-                    or invalid_policy.request.request_context is not None
-                ):
-                    raise AssertionError(
-                        "invalid policy did not fail closed",
-                    )
-            finally:
-                os.environ.pop("VYANE_PAW_POLICY", None)
+            policy_path.write_text("{invalid", encoding="utf-8")
+            invalid_policy = FakeContext()
+            response = await handler(invalid_policy, "route task")
+            if (
+                invalid_policy.injections
+                or invalid_policy.request.request_context is not None
+            ):
+                raise AssertionError(
+                    "invalid policy did not fail closed",
+                )
+            assert_bounded_denial(response, [str(policy_path)])
+
+            missing_path = Path(tmp) / "missing-policy.json"
+            os.environ["VYANE_PAW_POLICY"] = str(missing_path)
+            unreadable_policy = FakeContext()
+            response = await handler(unreadable_policy, "route task")
+            if (
+                unreadable_policy.injections
+                or unreadable_policy.request.request_context is not None
+            ):
+                raise AssertionError("unreadable policy did not fail closed")
+            assert_bounded_denial(response, [str(missing_path)])
+
+            policy_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "0.1.0",
+                        "profile": "invalid-policy",
+                        "allowed_tools": ["vyane_dispatch"],
+                        "allow_failover": True,
+                    },
+                ),
+                encoding="utf-8",
+            )
+            os.environ["VYANE_PAW_POLICY"] = str(policy_path)
+            invalid_policy = FakeContext()
+            response = await handler(invalid_policy, "dispatch task")
+            if (
+                invalid_policy.injections
+                or invalid_policy.request.request_context is not None
+            ):
+                raise AssertionError("schema-invalid policy did not fail closed")
+            assert_bounded_denial(response, [str(policy_path)])
     finally:
-        restore_agentscope_message_fixture(fixture)
+        if previous_policy is None:
+            os.environ.pop("VYANE_PAW_POLICY", None)
+        else:
+            os.environ["VYANE_PAW_POLICY"] = previous_policy
 
 
 def assert_launcher() -> None:
@@ -773,8 +927,8 @@ def main() -> None:
                 "allowlisted_mcp_tools": allowlisted_tools,
                 "pinned_runtime_contracts": runtime_contracts,
                 "request_scoped_tool_boundaries": 4,
-                "enforced_policy_denials": 5,
-                "normalized_result_cases": 7,
+                "enforced_policy_denials": 8,
+                "normalized_result_cases": 9,
                 "result_middleware_rewrites": 1,
                 "fixed_private_paths": 0,
             },

@@ -147,24 +147,45 @@ class RuntimePolicy:
         tool = required_tool(plan)
         if tool not in self.allowed_tools:
             raise PolicyError("当前策略未授权该 Vyane 工具。")
-        if mode == "failover" and not self.allow_failover:
-            raise PolicyError("当前策略未授权失败切换。")
+        if mode == "dispatch":
+            # Product dispatch is always target=auto. Explicit selectors use
+            # failover mode and are checked against allowed_targets below.
+            if "target" in plan or "targets" in plan:
+                raise PolicyError("自动分发不能携带显式目标。")
+            return
+        if mode == "route":
+            if "target" in plan or "targets" in plan:
+                raise PolicyError("路由预览不能携带显式目标。")
+            return
+        if mode == "failover":
+            if not self.allow_failover:
+                raise PolicyError("当前策略未授权失败切换。")
+            target = _profile_name(plan.get("target"), "target")
+            if self.allowed_targets is None or target not in self.allowed_targets:
+                raise PolicyError("目标 profile 未被当前策略授权。")
+            return
         if mode == "review":
             if not self.allow_broadcast:
                 raise PolicyError("当前策略未授权多目标评审。")
-            targets = str(plan.get("targets", "")).split(",")
+            raw_targets = plan.get("targets")
+            if not isinstance(raw_targets, str):
+                raise PolicyError("评审目标格式无效。")
+            targets = [
+                _profile_name(target, "targets") for target in raw_targets.split(",")
+            ]
+            if len(set(targets)) != len(targets):
+                raise PolicyError("评审目标不能重复。")
             if len(targets) > self.max_parallel_targets:
                 raise PolicyError("评审目标数量超过策略上限。")
-        else:
-            target = plan.get("target")
-            targets = [target] if isinstance(target, str) else []
-
-        if self.allowed_targets is not None:
             denied = [
-                target for target in targets if target not in self.allowed_targets
+                target
+                for target in targets
+                if self.allowed_targets is None or target not in self.allowed_targets
             ]
             if denied:
                 raise PolicyError("目标 profile 未被当前策略授权。")
+            return
+        raise PolicyError("命令模式未被策略识别。")
 
 
 _DEFAULT_POLICY = RuntimePolicy.from_mapping(
