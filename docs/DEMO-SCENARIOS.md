@@ -51,4 +51,8 @@ and broadcast evidence without requiring provider credentials.
 The pinned QwenPaw client currently does not turn local coroutine cancellation
 into an MCP `notifications/cancelled` message. Timeout is enforced and recorded
 by Vyane, while local cancellation is reported as a known integration gap
-rather than a completed server-side cancellation.
+rather than a completed server-side cancellation. The request ID needed for a
+correct notification is allocated inside MCP Python SDK 1.29.0 and is not
+exposed to QwenPaw's `call_tool` wrapper. The MVP therefore does not monkey-patch
+client internals; see
+[`0003-cancellation-owned-by-client-sdk.md`](decisions/0003-cancellation-owned-by-client-sdk.md).

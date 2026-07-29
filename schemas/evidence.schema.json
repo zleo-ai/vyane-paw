@@ -19,6 +19,7 @@
       "type": "string",
       "enum": [
         "compatibility",
+        "product_entry",
         "route",
         "failover",
         "failure_isolation",

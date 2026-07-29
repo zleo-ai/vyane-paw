@@ -56,6 +56,13 @@ prepare_upstream \
   "$vyane_revision" \
   "$vyane_dir"
 
+uv run \
+  --project "$repo_root/compat" \
+  --locked \
+  python "$repo_root/compat/plugin_contract.py" \
+  --qwenpaw-architecture \
+  "$qwenpaw_dir/src/qwenpaw/plugins/architecture.py"
+
 cargo build \
   --locked \
   --manifest-path "$vyane_dir/Cargo.toml" \

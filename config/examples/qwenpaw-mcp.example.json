@@ -1,11 +1,22 @@
 {
-  "name": "vyane-local",
-  "transport": "stdio",
-  "command": "vyane",
-  "args": [
-    "--config",
-    "/absolute/path/to/vyane.toml",
-    "mcp"
-  ],
-  "env": {}
+  "mcpServers": {
+    "vyane-paw": {
+      "name": "Vyane Paw",
+      "description": "Local Vyane routing, failover, and bounded multi-model review",
+      "enabled": true,
+      "transport": "stdio",
+      "command": "vyane-paw-mcp",
+      "args": [],
+      "env": {
+        "VYANE_PAW_CONFIG": "/absolute/path/to/vyane.toml"
+      },
+      "tools": [
+        "vyane_route",
+        "vyane_check",
+        "vyane_dispatch",
+        "vyane_broadcast",
+        "vyane_history"
+      ]
+    }
+  }
 }

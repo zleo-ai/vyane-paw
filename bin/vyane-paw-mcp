@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+vyane_bin="${VYANE_PAW_VYANE_BIN:-vyane}"
+vyane_config="${VYANE_PAW_CONFIG:-}"
+
+if [[ -z "$vyane_config" ]]; then
+  echo "VYANE_PAW_CONFIG must name a Vyane TOML configuration file." >&2
+  exit 64
+fi
+
+if [[ ! -f "$vyane_config" ]]; then
+  echo "VYANE_PAW_CONFIG does not name a readable file." >&2
+  exit 66
+fi
+
+if [[ "$vyane_bin" == */* ]]; then
+  if [[ ! -x "$vyane_bin" ]]; then
+    echo "VYANE_PAW_VYANE_BIN does not name an executable." >&2
+    exit 69
+  fi
+elif ! command -v "$vyane_bin" >/dev/null 2>&1; then
+  echo "Vyane executable was not found on PATH." >&2
+  exit 69
+fi
+
+exec "$vyane_bin" --config "$vyane_config" mcp
