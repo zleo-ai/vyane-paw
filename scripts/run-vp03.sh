@@ -34,4 +34,11 @@ jq -e \
   "$evidence_path" \
   >/dev/null
 
+if ! diff -u \
+  <(jq -S 'del(.started_at, .duration_ms)' "$repo_root/evidence/vp03-product-entry.json") \
+  <(jq -S 'del(.started_at, .duration_ms)' "$evidence_path"); then
+  echo "tracked VP-03 evidence drifted from the current generator" >&2
+  exit 1
+fi
+
 echo "VP-03 product-entry smoke passed."

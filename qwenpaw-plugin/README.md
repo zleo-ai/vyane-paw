@@ -16,3 +16,9 @@ qwenpaw plugin install /path/to/vyane-paw/qwenpaw-plugin
 The separate MCP entry is intentional: QwenPaw's public plugin API supports
 commands and Skill providers, while MCP clients are managed through the Console
 or its MCP API.
+
+Failover and review selectors are profile names, not arbitrary
+`provider/model` selectors. They accept only letters, digits, `.`, `_`, and
+`-`; this keeps user-controlled selectors out of the privileged instruction
+surface. The default MCP allowlist contains only the three tools used by the
+product modes.

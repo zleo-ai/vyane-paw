@@ -45,4 +45,29 @@ if grep -F "$test_root" "$test_root/missing.err" >/dev/null; then
   exit 1
 fi
 
+if VYANE_PAW_CONFIG="$test_root/not-found.toml" \
+  VYANE_PAW_VYANE_BIN="$fake_vyane" \
+  "$test_root/launcher" \
+  >"$test_root/not-found.out" 2>"$test_root/not-found.err"; then
+  echo "Launcher accepted a missing configuration file." >&2
+  exit 1
+fi
+if grep -F "$test_root" "$test_root/not-found.err" >/dev/null; then
+  echo "Missing-file error leaked an absolute path." >&2
+  exit 1
+fi
+
+mkdir "$test_root/bin"
+cp "$fake_vyane" "$test_root/bin/vyane"
+PATH="$test_root/bin:$PATH" \
+VYANE_PAW_CONFIG="$config_path" \
+VYANE_PAW_VYANE_BIN="vyane" \
+VYANE_PAW_TEST_CAPTURE="$capture_path" \
+  "$test_root/launcher"
+mapfile -t bare_args <"$capture_path"
+if [[ "${bare_args[*]}" != "${expected[*]}" ]]; then
+  echo "Bare-name launcher path forwarded unexpected arguments." >&2
+  exit 1
+fi
+
 echo "Vyane Paw product-entry launcher passed."

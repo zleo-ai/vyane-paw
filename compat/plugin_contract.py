@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import asyncio
 import importlib.metadata
 import importlib.util
 import json
 import sys
-import tempfile
 import time
+import types
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -31,7 +32,14 @@ def load_plugin_module() -> Any:
 
 
 def load_qwenpaw_manifest_type(path: Path) -> Any:
-    name = "vyane_paw_pinned_qwenpaw_plugin_architecture"
+    qwenpaw_dir = path.parent.parent
+    qwenpaw_package = types.ModuleType("qwenpaw")
+    qwenpaw_package.__path__ = [str(qwenpaw_dir)]
+    plugins_package = types.ModuleType("qwenpaw.plugins")
+    plugins_package.__path__ = [str(qwenpaw_dir / "plugins")]
+    sys.modules["qwenpaw"] = qwenpaw_package
+    sys.modules["qwenpaw.plugins"] = plugins_package
+    name = "qwenpaw.plugins.architecture"
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
         raise AssertionError("pinned QwenPaw manifest parser could not be loaded")
@@ -39,6 +47,56 @@ def load_qwenpaw_manifest_type(path: Path) -> Any:
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module.PluginManifest
+
+
+def method_parameters(path: Path, class_name: str, method_name: str) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            for item in node.body:
+                if (
+                    isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and item.name == method_name
+                ):
+                    positional = [arg.arg for arg in item.args.args]
+                    keyword_only = [arg.arg for arg in item.args.kwonlyargs]
+                    return set(positional + keyword_only)
+    raise AssertionError(f"{class_name}.{method_name} is missing from {path}")
+
+
+def assert_pinned_qwenpaw_api(architecture_path: Path) -> None:
+    qwenpaw_dir = architecture_path.parent.parent
+    api_path = qwenpaw_dir / "plugins" / "api.py"
+    hooks_path = qwenpaw_dir / "runtime" / "hooks.py"
+    runtime_path = qwenpaw_dir / "runtime" / "runtime.py"
+    builtin_path = qwenpaw_dir / "runtime" / "builtin_commands.py"
+
+    slash = method_parameters(api_path, "PluginApi", "register_slash_command")
+    if not {
+        "name",
+        "handler",
+        "aliases",
+        "category",
+        "help_text",
+        "metadata",
+    }.issubset(slash):
+        raise AssertionError("pinned slash-command API is incompatible")
+    skills = method_parameters(api_path, "PluginApi", "register_skill_provider")
+    if not {"skills_dir", "enabled_by_default", "channels"}.issubset(skills):
+        raise AssertionError("pinned Skill-provider API is incompatible")
+    injection = method_parameters(hooks_path, "HookContext", "inject_context")
+    if not {"content", "priority", "source"}.issubset(injection):
+        raise AssertionError("pinned context-injection API is incompatible")
+
+    runtime_source = runtime_path.read_text(encoding="utf-8")
+    if (
+        "cmd_msg = await cmd_registry.dispatch" not in runtime_source
+        or "if cmd_msg is not None:" not in runtime_source
+    ):
+        raise AssertionError("pinned slash-command return semantics drifted")
+    builtin_source = builtin_path.read_text(encoding="utf-8")
+    if 'TextBlock(type="text", text=text)' not in builtin_source:
+        raise AssertionError("pinned QwenPaw message construction drifted")
 
 
 class FakeApi:
@@ -78,6 +136,7 @@ def assert_manifest(qwenpaw_architecture: Path | None) -> None:
         )
         if parsed.id != "vyane-paw" or parsed.entry.backend != "plugin.py":
             raise AssertionError("pinned QwenPaw rejected the plugin manifest")
+        assert_pinned_qwenpaw_api(qwenpaw_architecture)
     skill = PLUGIN_DIR / "skills" / "vyane-paw" / "SKILL.md"
     if not skill.is_file():
         raise AssertionError("plugin Skill is missing")
@@ -103,11 +162,11 @@ async def assert_command_contract(module: Any) -> None:
     cases = {
         "route ROUTE_TASK_SENTINEL": ("route", None),
         "dispatch DISPATCH_TASK_SENTINEL": ("dispatch", None),
-        "failover resilient -- recover a synthetic request": (
+        "failover resilient -- FAILOVER_TASK_SENTINEL": (
             "failover",
             "resilient",
         ),
-        "review reviewer-a,reviewer-b -- compare synthetic options": (
+        "review reviewer-a,reviewer-b -- REVIEW_TASK_SENTINEL": (
             "review",
             "reviewer-a,reviewer-b",
         ),
@@ -120,8 +179,8 @@ async def assert_command_contract(module: Any) -> None:
         content, metadata = ctx.injections[0]
         if f'"mode":"{mode}"' not in content:
             raise AssertionError(f"{mode} was not preserved")
-        if selector and selector not in content:
-            raise AssertionError(f"{mode} selector was not preserved")
+        if selector and selector in content:
+            raise AssertionError(f"{mode} selector entered system context")
         if "TASK_SENTINEL" in content:
             raise AssertionError("user task was promoted into system context")
         expected_tool = {
@@ -139,8 +198,11 @@ async def assert_command_contract(module: Any) -> None:
         "",
         "review only-one -- task",
         "review a,a -- task",
+        "review a,,b -- task",
         "review a,b,c,d,e -- task",
+        "review a,bad target -- task",
         "failover a,b -- task",
+        "failover bad/target -- task",
     )
     for raw in invalid:
         try:
@@ -154,14 +216,11 @@ def assert_launcher() -> None:
     launcher = ROOT / "bin" / "vyane-paw-mcp"
     if not launcher.is_file():
         raise AssertionError("MCP launcher is missing")
-    with tempfile.TemporaryDirectory(prefix="vyane-paw-plugin-") as temp:
-        config = Path(temp) / "vyane.toml"
-        config.write_text("# synthetic\n", encoding="utf-8")
-        if "/absolute/path" in launcher.read_text(encoding="utf-8"):
-            raise AssertionError("launcher contains a fixed path")
+    if "/absolute/path" in launcher.read_text(encoding="utf-8"):
+        raise AssertionError("launcher contains a fixed path")
 
 
-def assert_mcp_import() -> None:
+def assert_mcp_import() -> int:
     payload = json.loads(
         (ROOT / "config" / "examples" / "qwenpaw-mcp.example.json").read_text(
             encoding="utf-8",
@@ -171,11 +230,12 @@ def assert_mcp_import() -> None:
     if client["command"] != "vyane-paw-mcp":
         raise AssertionError("MCP import bypasses the validated launcher")
     required = {"vyane_route", "vyane_dispatch", "vyane_broadcast"}
-    if not required.issubset(client["tools"]):
-        raise AssertionError("product tools are missing from the allowlist")
+    if set(client["tools"]) != required:
+        raise AssertionError("MCP allowlist exceeds the product tool surface")
     env = client.get("env", {})
     if set(env) != {"VYANE_PAW_CONFIG"}:
         raise AssertionError("example MCP environment is not minimal")
+    return len(client["tools"])
 
 
 def main() -> None:
@@ -197,7 +257,7 @@ def main() -> None:
     module = load_plugin_module()
     asyncio.run(assert_command_contract(module))
     assert_launcher()
-    assert_mcp_import()
+    allowlisted_tools = assert_mcp_import()
     if args.evidence is not None:
         lock = json.loads(args.upstreams_lock.read_text(encoding="utf-8"))
         upstreams = lock["upstreams"]
@@ -218,11 +278,14 @@ def main() -> None:
                 "registered_commands": 1,
                 "registered_skills": 1,
                 "validated_product_modes": 4,
-                "allowlisted_mcp_tools": 5,
+                "allowlisted_mcp_tools": allowlisted_tools,
+                "pinned_runtime_contracts": (
+                    6 if args.qwenpaw_architecture is not None else 0
+                ),
                 "fixed_private_paths": 0,
             },
             "limitations": [
-                "hermetic plugin contract, not a full QwenPaw UI session",
+                "pinned QwenPaw APIs are verified structurally, not through a full UI session",
                 "synthetic commands only; no paid model invocation",
                 "MCP DriverCard import remains a separate operator step",
             ],

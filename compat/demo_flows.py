@@ -361,6 +361,7 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                             "task": SYNTHETIC_TASK,
                             "stage": "review",
                             "candidates": ["economy", "reviewer"],
+                            "allow_frontier": False,
                         },
                     ),
                 )
@@ -390,6 +391,8 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                         {
                             "task": SYNTHETIC_TASK,
                             "target": "resilient",
+                            "allow_frontier": False,
+                            "sandbox": "read_only",
                             "timeout_secs": 5,
                         },
                     ),
@@ -616,6 +619,7 @@ async def run_flows(args: argparse.Namespace) -> list[dict[str, Any]]:
                         {
                             "task": SYNTHETIC_TASK,
                             "targets": "review-a,review-b",
+                            "sandbox": "read_only",
                             "timeout_secs": 5,
                         },
                     ),

@@ -12,10 +12,8 @@
       },
       "tools": [
         "vyane_route",
-        "vyane_check",
         "vyane_dispatch",
-        "vyane_broadcast",
-        "vyane_history"
+        "vyane_broadcast"
       ]
     }
   }
