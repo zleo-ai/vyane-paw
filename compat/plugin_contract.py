@@ -669,6 +669,7 @@ async def assert_result_middleware(module: Any) -> int:
     from agentscope.middleware import MiddlewareBase
     from agentscope.tool import ToolResponse
 
+    result_middleware_rewrites = 0
     empty_ctx = FakeContext()
     if module._result_middleware_factory(empty_ctx, None) is not None:
         raise AssertionError("result middleware installed without a request contract")
@@ -721,6 +722,7 @@ async def assert_result_middleware(module: Any) -> int:
     if normalized["operation_status"] != "completed":
         raise AssertionError("result middleware did not normalize payload")
     assert_operation_result_schema(normalized)
+    result_middleware_rewrites += 1
     if response.metadata != {
         "existing": "preserved",
         "vyane_paw_result_schema": "0.1.0",
@@ -751,7 +753,7 @@ async def assert_result_middleware(module: Any) -> int:
         "existing": "preserved",
     }:
         raise AssertionError("result middleware mutated an unrelated tool result")
-    return 1
+    return result_middleware_rewrites
 
 
 async def assert_policy_enforcement(module: Any, handler: Any) -> int:
