@@ -3,6 +3,7 @@ name = "vyane-paw-compat"
 version = "0.1.0"
 requires-python = ">=3.11,<3.14"
 dependencies = [
+    "agentscope==2.0.4.post1",
     "anyio==4.12.1",
     "httpx==0.28.1",
     "mcp==1.29.0",
@@ -11,5 +12,6 @@ dependencies = [
 [dependency-groups]
 dev = [
     "check-jsonschema>=0.35.0,<0.40.0",
+    "jsonschema>=4.0.0,<5.0.0",
     "ruff>=0.14.0,<0.16.0",
 ]

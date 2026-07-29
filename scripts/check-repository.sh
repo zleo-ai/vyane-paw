@@ -10,17 +10,73 @@ for file in upstreams.lock.json schemas/*.json config/examples/*.json evidence/*
   jq empty "$file"
 done
 
-uv run --project compat --locked ruff check compat/*.py qwenpaw-plugin/plugin.py
+uv run --project compat --locked ruff check compat/*.py qwenpaw-plugin/*.py
 uv run --project compat --locked ruff format --check \
-  compat/*.py qwenpaw-plugin/plugin.py
+  compat/*.py qwenpaw-plugin/*.py
 uv run --project compat --locked python compat/plugin_contract.py
 ./scripts/test-product-entry.sh
 uv run --project compat --locked check-jsonschema \
   --schemafile schemas/evidence.schema.json \
   evidence/*.json
 uv run --project compat --locked check-jsonschema \
+  --schemafile schemas/evidence.schema.json \
+  schemas/examples/*.evidence.json
+uv run --project compat --locked check-jsonschema \
   --schemafile schemas/policy.schema.json \
   schemas/examples/*.policy.json
+uv run --project compat --locked check-jsonschema \
+  --schemafile schemas/operation-result.schema.json \
+  schemas/examples/*.result.json
+
+invalid_publishable="$(mktemp)"
+invalid_publishable_log="$(mktemp)"
+cleanup() {
+  rm -f -- "$invalid_publishable" "$invalid_publishable_log"
+}
+trap cleanup EXIT
+jq '.sanitization_state = "publishable" | del(.publication_review)' \
+  evidence/vp03-product-entry.json >"$invalid_publishable"
+set +e
+uv run --project compat --locked check-jsonschema \
+  --schemafile schemas/evidence.schema.json \
+  "$invalid_publishable" >"$invalid_publishable_log" 2>&1
+schema_status=$?
+set -e
+case "$schema_status" in
+  0)
+    echo "Evidence became publishable without human review." >&2
+    exit 1
+    ;;
+  1)
+    ;;
+  *)
+    cat "$invalid_publishable_log" >&2
+    echo "Negative evidence-schema check did not execute reliably." >&2
+    exit 1
+    ;;
+esac
+
+set +e
+rg -n \
+  --glob '*.py' \
+  --glob '*.sh' \
+  --glob '!check-repository.sh' \
+  'sanitization_state.*publishable' \
+  compat qwenpaw-plugin scripts
+rg_status=$?
+set -e
+case "$rg_status" in
+  0)
+    echo "A generator can mark evidence publishable." >&2
+    exit 1
+    ;;
+  1)
+    ;;
+  *)
+    echo "Publishable-generator scan did not execute reliably." >&2
+    exit 1
+    ;;
+esac
 
 forbidden_tracked="$(
   git ls-files |

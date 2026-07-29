@@ -16,7 +16,11 @@
     "registered_skills": 1,
     "validated_product_modes": 4,
     "allowlisted_mcp_tools": 3,
-    "pinned_runtime_contracts": 6,
+    "pinned_runtime_contracts": 9,
+    "request_scoped_tool_boundaries": 4,
+    "enforced_policy_denials": 8,
+    "normalized_result_cases": 9,
+    "result_middleware_rewrites": 1,
     "fixed_private_paths": 0
   },
   "limitations": [
