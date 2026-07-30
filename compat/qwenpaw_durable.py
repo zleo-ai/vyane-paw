@@ -313,6 +313,7 @@ def wait_for_workflow_control(
     """
     deadline = time.monotonic() + timeout
     polls = 0
+    last: dict[str, Any] | None = None
     while time.monotonic() < deadline:
         contract = console_command(
             client,
@@ -322,6 +323,7 @@ def wait_for_workflow_control(
         )
         sequence += 1
         polls += 1
+        last = contract
         status = contract.get("operation_status")
         code = (contract.get("error") or {}).get("code")
         if status == "rejected" and code == "not_found":
@@ -329,10 +331,12 @@ def wait_for_workflow_control(
         if status == "transport_failure" or (
             status == "rejected" and code == "unavailable"
         ):
-            time.sleep(0.2)
+            time.sleep(1.0)
             continue
         raise AssertionError(f"workflow control readiness probe drifted: {contract}")
-    raise AssertionError("workflow control plane did not become ready")
+    raise AssertionError(
+        f"workflow control plane did not become ready: polls={polls} last={last}",
+    )
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:  # noqa: PLR0915
@@ -509,7 +513,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:  # noqa: PLR0915
                         client,
                         app_url,
                         sequence,
-                        timeout=30,
+                        timeout=120,
                     )
 
                     submitted = console_command(
@@ -651,9 +655,31 @@ def run(args: argparse.Namespace) -> dict[str, Any]:  # noqa: PLR0915
     }
 
 
+def dump_log_tails(root: Path, *, lines: int = 40) -> None:
+    """Print bounded runtime-log tails so a failed CI run is self-diagnosing.
+
+    Everything in this hermetic run is synthetic by design, so tails are
+    safe to print; they stay bounded and clearly marked.
+    """
+    for relative in ("qwenpaw-app.log", "data/daemon.log"):
+        path = root / relative
+        if not path.is_file():
+            print(f"--- {relative}: missing ---", flush=True)
+            continue
+        tail = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        print(f"--- {relative}: last {min(lines, len(tail))} lines ---", flush=True)
+        for line in tail[-lines:]:
+            print(line, flush=True)
+        print(f"--- end {relative} ---", flush=True)
+
+
 def main() -> None:
     args = parse_args()
-    evidence = run(args)
+    try:
+        evidence = run(args)
+    except BaseException:
+        dump_log_tails(args.runtime_root.resolve())
+        raise
     args.evidence.parent.mkdir(parents=True, exist_ok=True)
     args.evidence.write_text(
         json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
