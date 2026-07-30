@@ -40,6 +40,7 @@ which of those plans are current.
 | VP-11 | Complete and merged | Product documentation introduction (bilingual README, docs.zleo.ai content preparation) |
 | VP-12 | Complete and merged | Cancellation-propagation adoption spike and advisory upstream canary |
 | VP-13 | Complete and merged | Durable-workflow control-plane readiness gate (intermittent CI failure) |
+| VP-14 | In progress | Durable readiness budget and failure self-diagnosis |
 
 ## Verified closeout
 
