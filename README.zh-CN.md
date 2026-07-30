@@ -17,8 +17,8 @@ QwenPaw fork，也不是另一套 Vyane 重构。
 - 常驻中间服务：暂不建设；只有出现远程、多租户、鉴权或协议转换需求时再立项
 - 首个兼容基线：
   - QwenPaw `ebb5b24d0b2559af51d71a38547d88d384357a64`
-  - `vyane-rs` 固定到 `4848ec4f9d0b740fd8dc5f5586bc30111dc3d373`
-  - `rmcp` `3.0.0`
+  - `vyane-rs` 固定到 `319b9da521e3242b482dff46cf92f676b5f38686`
+  - `rmcp` `3.0.1`
 
 ## 仓库职责
 

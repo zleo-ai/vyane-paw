@@ -2,12 +2,12 @@
   "schema_version": "0.1.0",
   "scenario": "failure_isolation",
   "sanitization_state": "sanitized",
-  "started_at": "2026-07-29T12:46:56.092636+00:00",
-  "duration_ms": 258,
+  "started_at": "2026-07-30T02:29:39.683551+00:00",
+  "duration_ms": 255,
   "upstream_revisions": {
     "qwenpaw": "ebb5b24d0b2559af51d71a38547d88d384357a64",
-    "vyane_rs": "4848ec4f9d0b740fd8dc5f5586bc30111dc3d373",
-    "rmcp": "3.0.0",
+    "vyane_rs": "319b9da521e3242b482dff46cf92f676b5f38686",
+    "rmcp": "3.0.1",
     "python_mcp": "1.29.0"
   },
   "result": "passed",
