@@ -1,0 +1,28 @@
+{
+  "schema_version": "0.1.0",
+  "scenario": "cancellation",
+  "sanitization_state": "sanitized",
+  "started_at": "2026-07-30T05:40:02.567209+00:00",
+  "duration_ms": 2379,
+  "upstream_revisions": {
+    "qwenpaw": "ebb5b24d0b2559af51d71a38547d88d384357a64",
+    "agentscope": "2.0.4.post1",
+    "python_mcp": "1.29.0",
+    "observed_latest_agentscope": "2.0.5",
+    "observed_latest_mcp": "2.0.0"
+  },
+  "result": "passed",
+  "metrics": {
+    "cancellation_probe_completed": 1,
+    "cancellation_propagated": 0,
+    "fix_released_upstream": 1,
+    "pinned_chain_adopts_fix": 0,
+    "agentscope_allows_mcp2": 0
+  },
+  "limitations": [
+    "pinned QwenPaw coroutine cancellation does not propagate an MCP cancellation notification",
+    "pinned agentscope 2.0.4.post1 requires mcp<2.0.0",
+    "latest agentscope 2.0.5 requires mcp<2.0.0",
+    "adoption is gated by the agentscope requirement, not by QwenPaw code"
+  ]
+}

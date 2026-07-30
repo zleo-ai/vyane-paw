@@ -2,6 +2,12 @@
 
 - Status: accepted for the MVP
 - Date: 2026-07-29
+- Spike outcome (VP-12, 2026-07-30): the dispatcher cancellation behavior
+  shipped in MCP Python SDK `2.0.0`, but the pinned chain cannot adopt it —
+  the pinned (and current latest) `agentscope` releases require `mcp<2.0.0`.
+  The gap persists; the durable workflow lifecycle remains the cancellation
+  answer. `scripts/run-vp12.sh` now watches upstream adoption as an advisory
+  canary and fails loudly once an `agentscope` release allows `mcp` 2.x.
 
 ## Context
 
