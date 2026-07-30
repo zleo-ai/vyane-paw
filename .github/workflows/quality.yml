@@ -71,3 +71,16 @@ jobs:
           VYANE_PAW_RUNTIME_DIR: >-
             ${{ runner.temp }}/vyane-paw-${{ github.run_id }}-${{ github.job }}-${{ github.run_attempt }}
         run: ./scripts/run-vp08.sh
+
+  capability-probe:
+    runs-on: [self-hosted, vyane-paw]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Run capability-negotiation probe
+        env:
+          VYANE_PAW_RUNTIME_DIR: >-
+            ${{ runner.temp }}/vyane-paw-${{ github.run_id }}-${{ github.job }}-${{ github.run_attempt }}
+        run: ./scripts/run-vp09.sh

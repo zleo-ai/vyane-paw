@@ -1,0 +1,51 @@
+{
+  "schema_version": "0.1.0",
+  "scenario": "capability_probe",
+  "sanitization_state": "sanitized",
+  "started_at": "2026-07-30T01:16:49.247116+00:00",
+  "duration_ms": 48,
+  "upstream_revisions": {
+    "qwenpaw": "ebb5b24d0b2559af51d71a38547d88d384357a64",
+    "vyane_rs": "4848ec4f9d0b740fd8dc5f5586bc30111dc3d373",
+    "rmcp": "3.0.0",
+    "python_mcp": "1.29.0",
+    "compatibility_lane": "stable"
+  },
+  "result": "passed",
+  "metrics": {
+    "discover_probe_available": 0,
+    "discover_probe_completed": 1,
+    "product_claimed_extensions": 0,
+    "qwenpaw_client_lifecycle_closed": 1,
+    "qwenpaw_client_parity": 1,
+    "server_advertises_tasks": 0,
+    "server_exit_code": 0,
+    "server_process_reaped": 1
+  },
+  "capabilities": {
+    "negotiated_protocol_version": "2025-11-25",
+    "server_name": "vyane",
+    "server_version": "0.1.0",
+    "server_instructions_present": true,
+    "server_capability_keys": [
+      "tools"
+    ],
+    "client_supported_protocol_versions": [
+      "2024-11-05",
+      "2025-03-26",
+      "2025-06-18",
+      "2025-11-25"
+    ],
+    "discover_probe": {
+      "outcome": "error",
+      "error_code": -32601
+    },
+    "product_claimed": []
+  },
+  "limitations": [
+    "stdio transport only",
+    "observation only; no MCP extension is claimed as a product feature",
+    "isolated QwenPaw MCP client module, not the full QwenPaw application",
+    "no provider or model invocation"
+  ]
+}

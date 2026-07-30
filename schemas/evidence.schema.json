@@ -19,6 +19,7 @@
       "type": "string",
       "enum": [
         "compatibility",
+        "capability_probe",
         "product_entry",
         "qwenpaw_application",
         "durable_workflow",
@@ -69,6 +70,70 @@
       "type": "array",
       "items": {
         "type": "string"
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "client_supported_protocol_versions",
+        "discover_probe",
+        "negotiated_protocol_version",
+        "product_claimed",
+        "server_capability_keys",
+        "server_instructions_present",
+        "server_name",
+        "server_version"
+      ],
+      "properties": {
+        "client_supported_protocol_versions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "discover_probe": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "outcome"
+          ],
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "ok",
+                "error",
+                "transport_failure"
+              ]
+            },
+            "error_code": {
+              "type": "integer"
+            }
+          }
+        },
+        "negotiated_protocol_version": {
+          "type": "string"
+        },
+        "product_claimed": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "server_capability_keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "server_instructions_present": {
+          "type": "boolean"
+        },
+        "server_name": {
+          "type": "string"
+        },
+        "server_version": {
+          "type": "string"
+        }
       }
     },
     "publication_review": {
@@ -213,6 +278,70 @@
           }
         },
         "required": [
+          "metrics"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scenario": {
+            "const": "capability_probe"
+          }
+        },
+        "required": [
+          "scenario"
+        ]
+      },
+      "then": {
+        "properties": {
+          "metrics": {
+            "required": [
+              "discover_probe_available",
+              "discover_probe_completed",
+              "product_claimed_extensions",
+              "qwenpaw_client_lifecycle_closed",
+              "qwenpaw_client_parity",
+              "server_advertises_tasks",
+              "server_exit_code",
+              "server_process_reaped"
+            ],
+            "properties": {
+              "discover_probe_available": {
+                "enum": [
+                  0,
+                  1
+                ]
+              },
+              "discover_probe_completed": {
+                "const": 1
+              },
+              "product_claimed_extensions": {
+                "const": 0
+              },
+              "qwenpaw_client_lifecycle_closed": {
+                "const": 1
+              },
+              "qwenpaw_client_parity": {
+                "const": 1
+              },
+              "server_advertises_tasks": {
+                "enum": [
+                  0,
+                  1
+                ]
+              },
+              "server_exit_code": {
+                "const": 0
+              },
+              "server_process_reaped": {
+                "const": 1
+              }
+            }
+          }
+        },
+        "required": [
+          "capabilities",
           "metrics"
         ]
       }
