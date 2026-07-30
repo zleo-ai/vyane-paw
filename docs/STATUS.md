@@ -19,9 +19,9 @@ which of those plans are current.
     bounded multi-model review;
   - durable workflow submit, status, and cancel through explicit Vyane workflow
     tools.
-- Latest completed package: VP-10.
+- Latest completed package: VP-11.
 - Verified main commit:
-  `bbb603063519eafcd85161341bc1f40b8e9de7b4`.
+  `0ef0cd60db5b43699573baf3e2dca8c7d73fc4cb`.
 
 ## Work-package ledger
 
@@ -37,9 +37,18 @@ which of those plans are current.
 | VP-08 | Complete and merged | Explicit durable workflow submit/status/cancel lifecycle |
 | VP-09 | Complete and merged | Stable MCP capability-negotiation probe (advertised/negotiated/product-claimed separation) |
 | VP-10 | Complete and merged | Stable upstream lock promotion to vyane-rs `319b9da` / rmcp `3.0.1` |
-| VP-11 | Proposed | Product documentation introduction; scope and preconditions in the work package |
+| VP-11 | Complete and merged | Product documentation introduction (bilingual README, docs.zleo.ai content preparation) |
 
 ## Verified closeout
+
+VP-11 implementation commit
+`418a557781450e36295143003d5a89ffdb37e65e` passed the stable CI lanes in
+GitHub Actions run `30514141954`. Official GLM-5.2 independent documentation
+review run `366bd16c` returned `CLEAN` with no P0/P1 findings; its P2
+observation on evidence wording was closed in the same pull request, and the
+final documentation-delta review run `421bf692` returned `CLEAN`. PR #13
+merged as `0ef0cd60db5b43699573baf3e2dca8c7d73fc4cb`; all five jobs on
+merge-SHA run `30515181118` passed.
 
 VP-10 implementation commit
 `8f7edc16d864a408dfca1f748a82e127bff42ea4` passed all five jobs in GitHub
