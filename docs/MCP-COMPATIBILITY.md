@@ -6,16 +6,16 @@ The first proof uses the revisions in `upstreams.lock.json`:
 
 - QwenPaw `ebb5b24d0b2559af51d71a38547d88d384357a64` and its Python MCP
   client with a stateful initialization lifecycle.
-- `vyane-rs` at `4848ec4f9d0b740fd8dc5f5586bc30111dc3d373`.
-- Rust SDK `rmcp` `3.0.0`.
+- `vyane-rs` at `319b9da521e3242b482dff46cf92f676b5f38686`.
+- Rust SDK `rmcp` `3.0.1`.
 - stdio transport.
 
-`rmcp` 3.0 is an enabling upgrade, not proof that every MCP 2026-07-28 feature is
+`rmcp` 3.x is an enabling upgrade, not proof that every MCP 2026-07-28 feature is
 implemented by Vyane Paw.
 
 ## Verified compatibility boundary
 
-The direct stdio connection passed locally and in self-hosted CI on 2026-07-29
+The direct stdio connection passed locally and in self-hosted CI on 2026-07-30
 at the pinned revisions. The QwenPaw client completed its stateful
 initialization lifecycle against the `rmcp` 3.0 server, discovered the exact
 nine-tool surface, completed one safe call, received a structured
