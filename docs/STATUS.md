@@ -39,6 +39,7 @@ which of those plans are current.
 | VP-10 | Complete and merged | Stable upstream lock promotion to vyane-rs `319b9da` / rmcp `3.0.1` |
 | VP-11 | Complete and merged | Product documentation introduction (bilingual README, docs.zleo.ai content preparation) |
 | VP-12 | Complete and merged | Cancellation-propagation adoption spike and advisory upstream canary |
+| VP-13 | In progress | Durable-workflow control-plane readiness gate (intermittent CI failure) |
 
 ## Verified closeout
 
