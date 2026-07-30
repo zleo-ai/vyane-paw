@@ -28,8 +28,9 @@ gates, and the contracts that keep every product claim testable.
   (`VYANE_PAW_POLICY`) decides which tools, targets, and modes are authorized;
   with no policy configured, only a restricted route/dispatch default is
   available.
-- **Evidence-driven claims.** Every verified capability below links to
-  committed, schema-validated evidence and a gate script that reproduces it.
+- **Evidence-driven claims.** Every verified capability below is reproducible
+  through its gate script; the stable-lane rows additionally link to
+  committed, schema-validated evidence.
 
 ## Architecture in brief
 

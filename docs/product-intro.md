@@ -29,8 +29,9 @@ repeatable product flows with policy guardrails and reproducible evidence.
 - Compatibility is claimed only at exact pinned upstream revisions, recorded
   in a lock file; a moving candidate canary watches upstream and is advisory
   only.
-- Every claimed capability is backed by schema-validated, committed evidence
-  and a gate script that reproduces it.
+- Every claimed capability is reproducible through a gate script; stable-lane
+  capabilities are additionally backed by committed, schema-validated
+  evidence.
 - The product explicitly does not claim MCP Tasks support, remote transports,
   server discovery, or server-side cancellation from stopping a chat turn.
   Durable workflow cancellation is a separate, explicit lifecycle.
