@@ -19,9 +19,9 @@ which of those plans are current.
     bounded multi-model review;
   - durable workflow submit, status, and cancel through explicit Vyane workflow
     tools.
-- Latest completed package: VP-11.
+- Latest completed package: VP-12.
 - Verified main commit:
-  `0ef0cd60db5b43699573baf3e2dca8c7d73fc4cb`.
+  `3d3840355ec8dc8bbcdd2bb59c1df328d08d483a`.
 
 ## Work-package ledger
 
@@ -38,9 +38,18 @@ which of those plans are current.
 | VP-09 | Complete and merged | Stable MCP capability-negotiation probe (advertised/negotiated/product-claimed separation) |
 | VP-10 | Complete and merged | Stable upstream lock promotion to vyane-rs `319b9da` / rmcp `3.0.1` |
 | VP-11 | Complete and merged | Product documentation introduction (bilingual README, docs.zleo.ai content preparation) |
-| VP-12 | In progress | Cancellation-propagation adoption spike (ADR-0003 deferred action) |
+| VP-12 | Complete and merged | Cancellation-propagation adoption spike and advisory upstream canary |
 
 ## Verified closeout
+
+VP-12 implementation commit
+`689d77659a9453cf98a97227e5eb775999d56013` passed the CI lanes in GitHub
+Actions run `30516885260`. Official GLM-5.2 independent review run `62dfe298`
+returned `CLEAN` with no P0/P1 findings; its P2/P3 observations on the
+adoption-canary edge cases were closed in the same pull request, and the
+follow-up delta review run `1a64ec70` returned `CLEAN`. PR #15 merged as
+`3d3840355ec8dc8bbcdd2bb59c1df328d08d483a`; all five jobs on merge-SHA run
+`30517834436` passed.
 
 VP-11 implementation commit
 `418a557781450e36295143003d5a89ffdb37e65e` passed the stable CI lanes in
