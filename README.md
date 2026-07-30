@@ -19,8 +19,8 @@ Vyane implementation.
   protocol-translation requirements justify it
 - First compatibility baseline:
   - QwenPaw `ebb5b24d0b2559af51d71a38547d88d384357a64`
-  - `vyane-rs` baseline `4848ec4f9d0b740fd8dc5f5586bc30111dc3d373`
-  - `rmcp` `3.0.0`
+  - `vyane-rs` baseline `319b9da521e3242b482dff46cf92f676b5f38686`
+  - `rmcp` `3.0.1`
 
 ## Repository map
 

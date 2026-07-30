@@ -17,7 +17,7 @@ implemented by Vyane Paw.
 
 The direct stdio connection passed locally and in self-hosted CI on 2026-07-30
 at the pinned revisions. The QwenPaw client completed its stateful
-initialization lifecycle against the `rmcp` 3.0 server, discovered the exact
+initialization lifecycle against the `rmcp` 3.0.1 server, discovered the exact
 nine-tool surface, completed one safe call, received a structured
 invalid-argument response, and closed cleanly.
 
@@ -110,5 +110,5 @@ It improves the long-term protocol baseline, but it raises the importance of:
 Primary references:
 
 - [MCP 2026-07-28 overview](https://claude.com/blog/bringing-mcp-2026-07-28-to-claude)
-- [Rust SDK rmcp 3.0 release](https://github.com/modelcontextprotocol/rust-sdk/releases/tag/rmcp-v3.0.0)
+- [Rust SDK rmcp 3.0.1 release](https://github.com/modelcontextprotocol/rust-sdk/releases/tag/rmcp-v3.0.1)
 - [QwenPaw source](https://github.com/agentscope-ai/QwenPaw)
