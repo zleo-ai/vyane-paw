@@ -1,17 +1,20 @@
-// Continuous advancement of vyane-paw work packages that require vyane-rs
-// integration (对接). Re-reads live STATUS / lock / packages every run.
+// Continuous goal driver for vyane-paw work packages (and required vyane-rs
+// provider steps). Re-reads live STATUS / lock / packages every run.
 // Rhai — not the model — enforces: do not start vyane-paw VP-15 phase two
 // (result contract / lock-consuming adoption) until the stable lock pin is
 // known to contain the vyane-rs provider phase-one revision.
+//
+// Default focus=auto: assess → gate → implement one bounded step when safe,
+// otherwise emit a structured handoff for the next cycle.
 
 let meta = #{
     name: "advance-vyane-paw",
-    description: "Advance vyane-paw ↔ vyane-rs integration work packages from STATUS, enforcing provider (vyane-rs) phase-one before consumer (vyane-paw) phase-two",
-    when_to_use: "Continue durable-workflow or other cross-repo vyane-paw needs against vyane-rs without starting consumer phase-two early",
+    description: "Continuous goal: advance vyane-paw from STATUS against vyane-rs, with Rhai gates so provider phase-one lands in the stable lock before consumer phase-two",
+    when_to_use: "Keep driving the open vyane-paw priority (today VP-15 / durable workflow output) across sessions without starting paw phase-two early",
     phases: [
         #{ title: "Assess", detail: "tool-read STATUS, work package, lock, branches" },
         #{ title: "Gate", detail: "Rhai order gate for vyane-rs before paw adoption" },
-        #{ title: "Act", detail: "status handoff or optional bounded implement" },
+        #{ title: "Act", detail: "auto implement one step or status handoff" },
     ],
 };
 
@@ -72,10 +75,10 @@ let implement_schema = #{
 };
 
 // --- args -----------------------------------------------------------------
-// focus: "status" (default) | "implement"
+// focus: "auto" (default, continuous goal) | "status" | "implement"
 // work_package: optional package id hint (e.g. "VP-15"); agent still re-reads STATUS
 
-let focus = "status";
+let focus = "auto";
 let work_package_hint = "";
 if args != () {
     if args.focus != () {
@@ -93,17 +96,17 @@ if args != () {
         }
     }
 }
-if focus != "status" && focus != "implement" {
-    pause("verification", "args.focus must be \"status\" or \"implement\" (default status).");
+if focus != "status" && focus != "implement" && focus != "auto" {
+    pause("verification", "args.focus must be \"auto\", \"status\", or \"implement\" (default auto).");
 }
 
 // --- Assess ---------------------------------------------------------------
 
 phase("Assess");
-log("Assessing next vyane-paw ↔ vyane-rs increment from live STATUS and lock");
+log("Assessing next vyane-paw continuous-goal increment from live STATUS and lock");
 
 let assess_prompt = "";
-assess_prompt += "You are a cold agent advancing the private integration repo vyane-paw against the public provider vyane-rs.\n";
+assess_prompt += "You are a cold agent driving the continuous goal: advance the private integration repo vyane-paw against the public provider vyane-rs.\n";
 assess_prompt += "Do NOT answer from memory. Use tools (read_file, grep, list_dir, shell git status only as needed).\n";
 assess_prompt += "Mandatory reads in this workspace (vyane-paw root):\n";
 assess_prompt += "1) AGENTS.md\n";
@@ -167,7 +170,6 @@ if assess != () && assess.success && assess.output != () {
     if o.blockers != () {
         blockers = o.blockers;
     }
-    // Only clear the synthetic blocker when we actually got a priority line.
     if priority_summary != "assessment-unavailable" {
         assess_ok = true;
         if blockers.len() == 1 && blockers[0] == "assessment agent failed or returned unusable output" {
@@ -180,16 +182,13 @@ if assess != () && assess.success && assess.output != () {
 
 phase("Gate");
 
-// Consumer phase-two on vyane-paw must not proceed without lock-proven provider.
 let consumer_blocked = false;
 if owner_repo == "vyane-paw" || owner_repo == "both" {
     if !provider_landed {
         consumer_blocked = true;
     }
 }
-// Explicit safety: if assess claims paw work for output retrieval without lock, force block.
 if !provider_landed {
-    // Keep provider work allowed; only block consumer ownership / implement on paw.
     if owner_repo == "vyane-paw" {
         owner_repo = "vyane-rs";
         consumer_blocked = true;
@@ -206,7 +205,7 @@ if !provider_landed {
 
 let landed_s = if provider_landed { "true" } else { "false" };
 let blocked_s = if consumer_blocked { "true" } else { "false" };
-log("owner_repo=" + owner_repo + " provider_landed=" + landed_s + " consumer_blocked=" + blocked_s);
+log("owner_repo=" + owner_repo + " provider_landed=" + landed_s + " consumer_blocked=" + blocked_s + " focus=" + focus);
 
 // --- Act -----------------------------------------------------------------
 
@@ -223,11 +222,27 @@ let result = #{
     focus: focus,
     consumer_phase_two_blocked: consumer_blocked,
     implement: (),
+    mode: "handoff",
 };
 
-if focus == "status" {
+// Decide whether this cycle should implement.
+let do_implement = false;
+if focus == "implement" {
+    do_implement = true;
+}
+if focus == "auto" && assess_ok {
+    if owner_repo == "vyane-rs" {
+        do_implement = true;
+    }
+    if provider_landed && (owner_repo == "vyane-paw" || owner_repo == "both") {
+        do_implement = true;
+    }
+}
+
+if !do_implement {
     let report = "";
-    report += "# advance-vyane-paw status handoff\n\n";
+    report += "# advance-vyane-paw continuous goal — status handoff\n\n";
+    report += "Re-run `/advance-vyane-paw` (or focus=auto) after blockers clear to keep driving the goal.\n\n";
     report += "- priority: " + priority_summary + "\n";
     report += "- owner_repo: " + owner_repo + "\n";
     report += "- provider_phase_landed_in_lock: " + landed_s + "\n";
@@ -238,17 +253,18 @@ if focus == "status" {
     report += "- blockers: " + json_encode(blockers) + "\n";
     let path = write_scratch_file("advance-vyane-paw-status.md", report);
     result.scratch_path = path;
+    result.mode = "handoff";
     complete(result);
 }
 
-// focus == implement
-if focus == "implement" && (consumer_blocked || owner_repo != "vyane-rs" && !provider_landed) {
-    // Only pure provider implement is allowed while lock lacks phase-one.
+// implement path — refuse consumer work without lock-proven provider
+if consumer_blocked || (!provider_landed && owner_repo != "vyane-rs") {
     if owner_repo != "vyane-rs" {
         result.next_action = "Do not implement on vyane-paw yet. Finish provider phase-one on vyane-rs and lock promotion first.";
-        result.blockers.push("Rhai gate blocked focus=implement on consumer until provider_phase_landed_in_lock");
+        result.blockers.push("Rhai gate blocked implement on consumer until provider_phase_landed_in_lock");
         let path = write_scratch_file("advance-vyane-paw-blocked.md", json_encode(result));
         result.scratch_path = path;
+        result.mode = "blocked";
         complete(result);
     }
 }
@@ -257,25 +273,27 @@ if owner_repo == "blocked" || owner_repo == "none" || !assess_ok {
     result.next_action = "Assessment incomplete or blocked; fix blockers before implement.";
     let path = write_scratch_file("advance-vyane-paw-blocked.md", json_encode(result));
     result.scratch_path = path;
+    result.mode = "blocked";
     complete(result);
 }
 
 // Bounded implement agent — only when gates pass for the chosen owner.
 let impl_prompt = "";
-impl_prompt += "Implement the NEXT bounded increment for owner_repo=" + owner_repo + ".\n";
+impl_prompt += "You are executing ONE bounded increment for the continuous vyane-paw goal. owner_repo=" + owner_repo + ".\n";
 impl_prompt += "You MUST re-read with tools: docs/STATUS.md, the work package(s) ";
 impl_prompt += json_encode(work_package_ids);
 impl_prompt += ", and upstreams.lock.json. Do not use memory.\n";
 impl_prompt += "Agreed next_action from assessment: " + next_action + "\n";
-impl_prompt += "Rules from AGENTS.md: no credentials; no permanent middle gateway; pin exact revisions for compatibility claims; work from origin/main feature branches.\n";
+impl_prompt += "Rules from AGENTS.md: no credentials; no permanent middle gateway; pin exact revisions for compatibility claims; prefer branching from origin/main.\n";
+impl_prompt += "Stay inside one reviewable step: code + tests + docs for this package only. Do not claim merge or lock promotion unless you actually did them with evidence.\n";
 if owner_repo == "vyane-rs" {
-    impl_prompt += "Work in the sibling vyane-rs checkout or existing worktree for the provider package (e.g. WP-127). Run cargo fmt/clippy/targeted tests for changed crates.\n";
+    impl_prompt += "Work in sibling ../vyane-rs or an existing worktree (e.g. ../vyane-rs-worktrees/wp127-workflow-output) for the provider package (WP-127). Run cargo fmt/clippy/targeted tests for changed crates. If code is already implemented, advance the remaining gate: full suite, independent review prep, or open/update PR — still one bounded step.\n";
 } else if owner_repo == "vyane-paw" {
     impl_prompt += "Consumer work only because provider_phase_landed_in_lock was true. Project new fields through result_contract and evidence; run scripts/check-repository.sh and package gates.\n";
 } else {
     impl_prompt += "If both, prefer the smaller provider-safe step first; do not skip lock gates.\n";
 }
-impl_prompt += "Return summary, changed_paths, verification_ran, remaining_blockers. Do not claim lock promotion without editing upstreams.lock.json to an exact SHA you verified.\n";
+impl_prompt += "Return summary, changed_paths, verification_ran, remaining_blockers.\n";
 
 let impl = agent(impl_prompt, #{
     label: "implement-increment",
@@ -283,6 +301,7 @@ let impl = agent(impl_prompt, #{
     output_schema: implement_schema,
 });
 
+result.mode = "implement";
 if impl != () && impl.success && impl.output != () {
     result.implement = impl.output;
     if impl.output.summary != () {
@@ -293,7 +312,8 @@ if impl != () && impl.success && impl.output != () {
     }
 } else {
     result.blockers.push("implement agent failed or returned unusable output");
-    result.next_action = "Implement agent did not finish; resume after inspecting journal.";
+    result.next_action = "Implement agent did not finish; re-run /advance-vyane-paw after inspecting the journal.";
+    result.mode = "implement_failed";
 }
 
 let path = write_scratch_file("advance-vyane-paw-implement.md", json_encode(result));
