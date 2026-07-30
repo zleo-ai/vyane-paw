@@ -41,6 +41,7 @@ which of those plans are current.
 | VP-12 | Complete and merged | Cancellation-propagation adoption spike and advisory upstream canary |
 | VP-13 | Complete and merged | Durable-workflow control-plane readiness gate (intermittent CI failure) |
 | VP-14 | Complete and merged | Durable readiness budget and failure self-diagnosis |
+| VP-15 | Proposed | Durable workflow output retrieval; phase one belongs to vyane-rs and must land first |
 
 ## Verified closeout
 
@@ -116,10 +117,29 @@ checks after a new change.
 
 ## Current priorities
 
-Feature work on the middleware takes precedence. A new engineering increment
-must start with a new scoped work package containing goal, dependencies,
-non-goals, acceptance criteria, verification commands, and required evidence.
-Do not silently reopen VP-04 or VP-05 as the next feature.
+The owner approved three next directions on 2026-07-30; they are the
+intended continuation order for a new agent picking up this repository:
+
+1. **VP-15: durable workflow output retrieval** (two phases, proposed in
+   `work-packages/VP-15.md`). Phase one adds a bounded output projection to
+   the vyane-rs `WorkflowView` in the vyane-rs repository — that work has
+   not started and must land first; phase two projects it through the Vyane
+   Paw result contract. Do not start phase two before the stable lock
+   contains phase one.
+2. **Durable-failure forensics, standing watch.** VP-14 made every
+   durable-workflow CI failure dump bounded runtime-log tails. If the
+   `durable-workflow` job fails again, read the tails first; only then
+   decide whether a bounded daemon-connect retry belongs in vyane-rs.
+   No standing change is needed while it stays green.
+3. **agentscope / MCP SDK v2 adoption, standing watch.** The VP-12 canary
+   (`scripts/run-vp12.sh`, advisory candidate lane) fails loudly once a
+   current agentscope release allows `mcp` 2.x. When it fires, re-run the
+   full ADR-0003 QwenPaw-plus-SDK-v2 spike before changing any claim.
+
+Feature work on the middleware takes precedence otherwise. A new engineering
+increment must start with a new scoped work package containing goal,
+dependencies, non-goals, acceptance criteria, verification commands, and
+required evidence. Do not silently reopen VP-04 or VP-05 as the next feature.
 
 The following work is explicitly deferred until requested:
 
