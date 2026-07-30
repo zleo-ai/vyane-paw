@@ -235,7 +235,11 @@ def assert_contract(
     if payload.get("tool") != tool or payload.get("mode") != mode:
         raise AssertionError("durable result identity drifted")
     if payload.get("operation_status") != "completed":
-        raise AssertionError("durable control operation was not completed")
+        raise AssertionError(
+            "durable control operation was not completed: "
+            f"status={payload.get('operation_status')} "
+            f"error={payload.get('error')}",
+        )
     data = payload.get("data")
     if not isinstance(data, dict):
         raise AssertionError("durable result omitted lifecycle data")
@@ -287,6 +291,48 @@ def wait_for_workflow_state(
             return last, sequence
         time.sleep(0.1)
     raise AssertionError(f"workflow did not reach {sorted(wanted)}: {last}")
+
+
+READINESS_PROBE_CALLER_ID = "00000000-0000-7000-8000-000000000000"
+
+
+def wait_for_workflow_control(
+    client: httpx.Client,
+    base_url: str,
+    sequence: int,
+    *,
+    timeout: float,
+) -> tuple[int, int]:
+    """Gate the first durable submission on control-plane readiness.
+
+    A status call for a never-submitted canonical caller id is rejected with
+    ``not_found`` once the workflow control plane is connected; ``unavailable``
+    and transport-level envelopes mean the new MCP server process is still
+    attaching to the daemon. Any other shape fails the test outright — the
+    gate never masks an unexpected response.
+    """
+    deadline = time.monotonic() + timeout
+    polls = 0
+    while time.monotonic() < deadline:
+        contract = console_command(
+            client,
+            base_url,
+            f"/vyane workflow-status {READINESS_PROBE_CALLER_ID}",
+            sequence,
+        )
+        sequence += 1
+        polls += 1
+        status = contract.get("operation_status")
+        code = (contract.get("error") or {}).get("code")
+        if status == "rejected" and code == "not_found":
+            return sequence, polls
+        if status == "transport_failure" or (
+            status == "rejected" and code == "unavailable"
+        ):
+            time.sleep(0.2)
+            continue
+        raise AssertionError(f"workflow control readiness probe drifted: {contract}")
+    raise AssertionError("workflow control plane did not become ready")
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:  # noqa: PLR0915
@@ -459,6 +505,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:  # noqa: PLR0915
                             "durable tools drifted after app restart",
                         )
                     wait_for_plugin_command(client, app_url, 30)
+                    sequence, readiness_polls = wait_for_workflow_control(
+                        client,
+                        app_url,
+                        sequence,
+                        timeout=30,
+                    )
 
                     submitted = console_command(
                         client,
@@ -587,6 +639,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:  # noqa: PLR0915
             "repeated_cancel_requests": 2,
             "task_log_leaks": 0,
             "terminal_cancelled": 1,
+            "workflow_control_readiness_polls": readiness_polls,
             "workflow_submitted": 1,
         },
         "limitations": [
