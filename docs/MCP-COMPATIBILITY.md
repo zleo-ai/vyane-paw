@@ -49,6 +49,10 @@ The compatibility boundary now has two deliberately different lanes:
 - `scripts/run-vp08.sh stable` proves the real durable workflow lifecycle
   against the stable lock. `scripts/run-vp08.sh candidate` runs the same
   lifecycle against the candidate checkout after its isolated probe.
+- `scripts/run-vp09.sh` is the stable capability-negotiation probe. It records
+  what the pinned endpoints advertise and negotiate
+  (`evidence/vp09-capabilities.json`) without claiming any MCP extension as a
+  product feature.
 
 The candidate checkout and evidence path are isolated from the stable lane.
 Its CI job is visible but advisory: an upstream candidate failure must not
@@ -87,10 +91,10 @@ they are not part of the stable compatibility claim.
 | Concurrent calls | VP-02 | timing and result fixture |
 | Streamable HTTP | Deferred | architecture decision |
 | Stateless request handling | Deferred | protocol test |
-| `server/discover` | Explore | capability probe |
+| `server/discover` | Explore | VP-09 probe recorded method-not-found (`-32601`) at the pinned revisions |
 | MRTR routing metadata | Explore | design note and prototype |
 | Custom Vyane durable workflow tools | VP-08 complete | real submit/status/cancel lifecycle through pinned QwenPaw |
-| MCP Tasks extension | Deferred until negotiated | capability probe and future bounded work package |
+| MCP Tasks extension | Deferred until negotiated | VP-09 probe recorded no `tasks` advertisement at the pinned revisions; capability probe and future bounded work package |
 
 ## Upgrade impact
 
