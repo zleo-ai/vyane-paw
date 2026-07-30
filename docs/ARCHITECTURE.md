@@ -60,6 +60,25 @@ Skill-provider registration but no MCP DriverCard registration. Keeping the
 standard MCP import separate avoids coupling this repository to internal card
 storage or application services.
 
+## Durable workflow control
+
+Request-bound route, dispatch, failover, and review calls keep finite execution
+timeouts. Stopping the local QwenPaw turn does not prove that its already-issued
+server request was cancelled.
+
+Durable work is a separate lifecycle. The plugin calls
+`vyane_workflow_submit`, `vyane_workflow_status`, and `vyane_workflow_cancel`
+through QwenPaw's governed DriverManager. Submit constructs one fixed,
+single-step read-only workflow from a policy-authorized target and the original
+user task. Status and cancel use a caller-owned canonical UUIDv7. The model
+does not select raw workflow arguments or cancellation targets.
+
+This path uses a local resident Vyane daemon so workflow state can outlive one
+chat request. It remains within the local stdio integration boundary and is not
+a new network gateway. These custom Vyane tools are also distinct from the MCP
+Tasks extension, which is not claimed until both pinned endpoints negotiate and
+pass it.
+
 ## Why no gateway in phase one
 
 Both sides already implement MCP. A gateway would add lifecycle, deployment,
@@ -70,11 +89,15 @@ gateway becomes justified when at least one of these is accepted:
 - Multiple users need tenant isolation and centralized policy.
 - An enterprise authentication boundary must be enforced.
 - Legacy and modern MCP transports require explicit translation.
-- Durable asynchronous tasks need a shared control plane.
+- Durable asynchronous tasks need a shared control plane across hosts or
+  tenants. A local resident daemon alone is not sufficient justification.
 
 ## Evolution
 
 1. Direct local stdio compatibility.
-2. QwenPaw plugin and three product scenarios.
-3. Policy, evidence, packaging, and measurable acceptance.
-4. Optional remote gateway and MCP 2026-07-28 extensions.
+2. Policy-bounded QwenPaw plugin and request-bound product scenarios.
+3. Real QwenPaw application validation and explicit local durable workflow
+   control.
+4. Policy, evidence, packaging, and measurable acceptance as separately scoped
+   work.
+5. Optional remote gateway and negotiated MCP 2026-07-28 extensions.

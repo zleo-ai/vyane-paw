@@ -54,6 +54,10 @@ Vyane run.
 - MCP task-augmented requests use their own `tasks/cancel` operation rather
   than request cancellation. A future durable-workflow experience should map to
   that lifecycle after both QwenPaw and Vyane negotiate a compatible protocol.
+- VP-08 meanwhile provides a separate product lifecycle over custom Vyane
+  `workflow_submit`, `workflow_status`, and `workflow_cancel` tools. It gives
+  long-running work an explicit cancellation path, but it neither repairs
+  request cancellation nor claims MCP Tasks compatibility.
 
 [issue-2507]: https://github.com/modelcontextprotocol/python-sdk/issues/2507
 [pr-2838]: https://github.com/modelcontextprotocol/python-sdk/pull/2838

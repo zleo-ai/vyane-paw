@@ -28,33 +28,38 @@ QwenPaw fork，也不是另一套 Vyane 重构。
 - 策略与演示证据的可移植 schema
 - 初赛、决赛材料所需的技术事实、指标和脱敏展示资产
 
-## 今天就能启动
+当前工作包状态、暂缓范围和其他 Agent 的续接步骤，以
+[docs/STATUS.md](docs/STATUS.md) 为准。
 
-[VP-01](work-packages/VP-01.md) 已完成并合入：未修改的 QwenPaw MCP 客户端
-能够连接固定版本的 `vyane-rs` stdio MCP server，完成初始化、精确 9 工具发现、
-安全调用、非法参数拒绝和干净退出。
+## 当前工程基线
 
-[VP-02](work-packages/VP-02.md) 的首个 hermetic 增量已在本地跑通：无需真实密钥
-或付费模型，即可复验确定性路由、失败切换、并行广播、单目标故障隔离与超时。
-测试也确认了一个边界：直接取消 QwenPaw 的本地 `call_tool` 协程目前不会传播
-MCP cancellation notification，因此不能宣称服务端 run 已取消。
+VP-01 至 VP-03、VP-06 至 VP-08 均已完成并合入。当前已验证：
 
-## 产品入口（开发中）
+- 固定版本 QwenPaw 客户端与 `vyane-rs` 的 stdio MCP 兼容；
+- 路由、失败切换、并行广播、超时和故障隔离；
+- 受策略约束的 QwenPaw 插件与 launcher；
+- 隔离执行的 `vyane-rs main` 候选兼容性 canary；
+- 真实固定版本 QwenPaw 应用链路；
+- 持久工作流提交、状态查询和显式取消。
 
-`qwenpaw-plugin/` 已提供不修改 QwenPaw 内核的 bundle 插件：
+## 产品入口
 
-- `/vyane route <任务>`：只做确定性路由预览；
-- `/vyane dispatch <任务>`：使用安全默认值自动路由并执行；
-- `/vyane failover <profile> -- <任务>`：使用该 profile 已声明的失败切换链；
-- `/vyane review <profile-a,profile-b> -- <任务>`：对二至四个目标做一次并行评审。
+`qwenpaw-plugin/` 在不修改 QwenPaw 内核的前提下提供一个 `/vyane` 命令和七种
+产品模式：
 
-安装时保持 QwenPaw 离线：
+- `/vyane route <任务>`：确定性路由预览；
+- `/vyane dispatch <任务>`：按安全默认值自动路由并执行；
+- `/vyane failover <profile> -- <任务>`：使用已授权 profile 的失败切换链；
+- `/vyane review <profile-a,profile-b> -- <任务>`：对二至四个目标并行评审；
+- `/vyane workflow-submit <profile> -- <任务>`：提交固定单步只读工作流；
+- `/vyane workflow-status <uuidv7>`：查询持久工作流状态；
+- `/vyane workflow-cancel <uuidv7>`：显式请求取消持久工作流。
 
-```bash
-install -m 0755 bin/vyane-paw-mcp "$HOME/.local/bin/vyane-paw-mcp"
-qwenpaw plugin install /path/to/vyane-paw/qwenpaw-plugin
-```
+`scripts/run-vp03.sh` 复验插件与 launcher 合约，`scripts/run-vp07.sh` 复验真实
+QwenPaw 应用链路，`scripts/run-vp08.sh` 复验持久工作流生命周期。
 
-随后将 `config/examples/qwenpaw-mcp.example.json` 中的示例配置路径替换为
-部署环境里的 Vyane 配置文件，并在 QwenPaw Console 的“智能体 → MCP”页面导入。
-配置只允许产品所需工具，不包含模型凭据；Vyane provider 凭据继续由部署环境提供。
+直接停止 QwenPaw 的请求协程仍不等于服务端请求已取消；请求型能力继续使用有限
+超时。VP-08 的工作流取消是独立、显式的 Vyane 产品生命周期，不是 MCP 请求取消，
+也不代表已经实现 MCP Tasks 扩展。
+
+安装、录屏、比赛材料和线上文档发布当前均为暂缓项，功能推进优先。

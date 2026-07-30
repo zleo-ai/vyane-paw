@@ -25,6 +25,8 @@ Vyane implementation.
 ## Repository map
 
 - `docs/ARCHITECTURE.md` — system boundaries and target architecture
+- `docs/STATUS.md` — current work-package ledger, deferred scope, and
+  context-free continuation procedure
 - `docs/MCP-COMPATIBILITY.md` — protocol baseline and validation matrix
 - `docs/COMPETITION-PLAN.md` — delivery milestones through the initial and final
   submissions
@@ -38,18 +40,29 @@ Vyane implementation.
 
 ## Product entry
 
-The installable bundle under `qwenpaw-plugin/` registers one `/vyane` command
-with route, automatic dispatch, named-profile failover, and bounded multi-model
-review modes. The standard QwenPaw MCP import in `config/examples/` connects
-that product entry to the validated `vyane-paw-mcp` stdio launcher without
-putting provider credentials in this repository.
+The bundle under `qwenpaw-plugin/` registers one `/vyane` command with seven
+product modes:
 
-Run `scripts/run-vp03.sh` to reproduce the pinned compatibility gate, all
-synthetic product flows, the plugin contract, and the launcher boundary.
+- `route` and automatic `dispatch`;
+- named-profile `failover`;
+- bounded multi-model `review`;
+- durable `workflow-submit`, `workflow-status`, and `workflow-cancel`.
 
-Local QwenPaw coroutine cancellation is not server-side Vyane cancellation at
-the pinned MCP Python SDK revision. The MVP uses finite execution timeouts and
-reports that limitation explicitly instead of carrying a private SDK monkey
-patch.
+The standard QwenPaw MCP import in `config/examples/` connects this product
+entry to the validated `vyane-paw-mcp` stdio launcher without putting provider
+credentials in the repository. Durable controls are invoked through QwenPaw's
+governed DriverManager and require separate policy authorization.
+
+Use `scripts/run-vp03.sh` for the pinned plugin and launcher contract,
+`scripts/run-vp07.sh` for the real headless QwenPaw application path, and
+`scripts/run-vp08.sh` for the durable workflow lifecycle. The full current
+ledger and continuation procedure are in
+[docs/STATUS.md](docs/STATUS.md).
+
+Local QwenPaw coroutine cancellation is not server-side Vyane request
+cancellation at the pinned MCP Python SDK revision. Request-bound modes retain
+finite execution timeouts. The separate VP-08 durable lifecycle provides
+explicit workflow cancellation through custom Vyane tools; it is not the MCP
+Tasks extension.
 
 See [README.zh-CN.md](README.zh-CN.md) for the Chinese overview.
