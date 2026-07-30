@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 import tomllib
 from datetime import UTC, datetime
@@ -65,7 +66,12 @@ def pypi_metadata(project: str, version: str | None) -> dict[str, Any]:
     return response.json()
 
 
-def mcp_requirement(metadata: dict[str, Any]) -> str | None:
+def mcp_requirement(metadata: dict[str, Any]) -> str:
+    """Return the project's `mcp` requirement string, or "" when absent.
+
+    An absent requirement means no version constraint at all, which callers
+    must treat as allowing any `mcp` release.
+    """
     for requirement in metadata["info"].get("requires_dist") or []:
         name = requirement.split(";", 1)[0].strip()
         base = name.split("[", 1)[0]
@@ -73,7 +79,7 @@ def mcp_requirement(metadata: dict[str, Any]) -> str | None:
             base = base.split(operator, 1)[0]
         if base.strip() == "mcp":
             return name
-    return None
+    return ""
 
 
 def version_tuple(text: str) -> tuple[int, ...]:
@@ -96,11 +102,15 @@ def compare(left: tuple[int, ...], right: tuple[int, ...]) -> int:
 
 
 def requirement_allows(requirement: str | None, version: tuple[int, ...]) -> bool:
-    """Evaluate a PEP 440 subset (`<`,`<=`,`>`,`>=`,`==`,`!=`, comma-joined)."""
+    """Evaluate a PEP 440 subset (`<`,`<=`,`>`,`>=`,`==`,`!=`, comma-joined).
+
+    An empty requirement means the dependency carries no version constraint
+    (or is absent entirely), so any version is allowed.
+    """
     if requirement is None:
         return False
     constraint = requirement.split(";", 1)[0]
-    constraint = constraint.split("[", 1)[-1] if "[" in constraint else constraint
+    constraint = re.sub(r"\[[^\]]*\]", "", constraint)
     constraint = constraint.removeprefix("mcp").strip()
     if not constraint:
         return True

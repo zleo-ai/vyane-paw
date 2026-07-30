@@ -2,8 +2,8 @@
   "schema_version": "0.1.0",
   "scenario": "cancellation",
   "sanitization_state": "sanitized",
-  "started_at": "2026-07-30T05:29:47.170765+00:00",
-  "duration_ms": 2177,
+  "started_at": "2026-07-30T05:40:02.567209+00:00",
+  "duration_ms": 2379,
   "upstream_revisions": {
     "qwenpaw": "ebb5b24d0b2559af51d71a38547d88d384357a64",
     "agentscope": "2.0.4.post1",
