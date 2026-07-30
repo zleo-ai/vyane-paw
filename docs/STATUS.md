@@ -19,7 +19,7 @@ which of those plans are current.
     bounded multi-model review;
   - durable workflow submit, status, and cancel through explicit Vyane workflow
     tools.
-- Latest completed package: VP-09.
+- Latest completed package: VP-08.
 - Verified main commit:
   `a87cfc737624bd8ef6aefeff565ffcca1c9281e8`.
 
@@ -35,7 +35,6 @@ which of those plans are current.
 | VP-06 | Complete and merged | Isolated moving-candidate compatibility canary |
 | VP-07 | Complete and merged | Real pinned headless QwenPaw application integration |
 | VP-08 | Complete and merged | Explicit durable workflow submit/status/cancel lifecycle |
-| VP-09 | Complete and merged | Stable MCP capability-negotiation probe (advertised/negotiated/product-claimed separation) |
 
 ## Verified closeout
 
@@ -43,7 +42,7 @@ VP-09 implementation commit
 `f9bbdcf35a122cc786c44ec4ed7e7195665130e3` passed all five jobs in GitHub
 Actions run `30505303139`. Official GLM-5.2 independent review run `d2b1130c`
 returned `CLEAN` with no P0/P1 findings. The merge SHA of PR #9 is recorded
-in the pull-request history.
+in the pull-request history upon merge.
 
 VP-08 implementation commit
 `454e9fd713a98063a3e50ab4542f80a0f94b9547` passed all four self-hosted jobs in
