@@ -187,6 +187,7 @@
               "repeated_cancel_requests",
               "task_log_leaks",
               "terminal_cancelled",
+              "workflow_control_readiness_polls",
               "workflow_submitted"
             ],
             "properties": {
@@ -213,6 +214,10 @@
               },
               "terminal_cancelled": {
                 "const": 1
+              },
+              "workflow_control_readiness_polls": {
+                "type": "integer",
+                "minimum": 1
               },
               "workflow_submitted": {
                 "const": 1
