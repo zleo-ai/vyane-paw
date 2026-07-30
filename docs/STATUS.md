@@ -38,6 +38,7 @@ which of those plans are current.
 | VP-09 | Complete and merged | Stable MCP capability-negotiation probe (advertised/negotiated/product-claimed separation) |
 | VP-10 | Complete and merged | Stable upstream lock promotion to vyane-rs `319b9da` / rmcp `3.0.1` |
 | VP-11 | Complete and merged | Product documentation introduction (bilingual README, docs.zleo.ai content preparation) |
+| VP-12 | In progress | Cancellation-propagation adoption spike (ADR-0003 deferred action) |
 
 ## Verified closeout
 
