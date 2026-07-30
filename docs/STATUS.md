@@ -86,11 +86,8 @@ The following work is explicitly deferred until requested:
 
 - installation, upgrade, rollback, and end-user packaging;
 - screenshots, recording, and competition-submission production;
-- full bilingual README editorial expansion beyond keeping facts aligned
-  (requested by the owner on 2026-07-30; scope and timing proposed in
-  `work-packages/VP-11.md`);
-- publishing a Vyane Paw section on `docs.zleo.ai` (owner disclosure review
-  first; content preparation is part of the VP-11 proposal);
+- publishing a Vyane Paw section on `docs.zleo.ai` (content prepared in
+  VP-11; publishing requires an explicit owner disclosure review first);
 - a remote gateway;
 - claiming MCP Tasks support before both pinned endpoints negotiate and pass it.
 
