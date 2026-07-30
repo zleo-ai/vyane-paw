@@ -121,11 +121,13 @@ The owner approved three next directions on 2026-07-30; they are the
 intended continuation order for a new agent picking up this repository:
 
 1. **VP-15: durable workflow output retrieval** (two phases, proposed in
-   `work-packages/VP-15.md`). Phase one adds a bounded output projection to
-   the vyane-rs `WorkflowView` in the vyane-rs repository — that work has
-   not started and must land first; phase two projects it through the Vyane
-   Paw result contract. Do not start phase two before the stable lock
-   contains phase one.
+   `work-packages/VP-15.md`). Phase one is **vyane-rs WP-127** (branch
+   `feat/wp127-workflow-output-projection`, plan
+   `docs/plan/WP-127.md`): bounded success `output` / `output_omitted` on
+   the MCP `WorkflowView`. That package is proposed and not yet
+   implemented; phase two projects the fields through the Vyane Paw result
+   contract. Do not start phase two before the stable lock contains phase
+   one.
 2. **Durable-failure forensics, standing watch.** VP-14 made every
    durable-workflow CI failure dump bounded runtime-log tails. If the
    `durable-workflow` job fails again, read the tails first; only then
