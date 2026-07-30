@@ -19,9 +19,9 @@ which of those plans are current.
     bounded multi-model review;
   - durable workflow submit, status, and cancel through explicit Vyane workflow
     tools.
-- Latest completed package: VP-12.
+- Latest completed package: VP-13.
 - Verified main commit:
-  `3d3840355ec8dc8bbcdd2bb59c1df328d08d483a`.
+  `91d50494c340a04473467f4f4d53cbc7118f4df0`.
 
 ## Work-package ledger
 
@@ -39,9 +39,18 @@ which of those plans are current.
 | VP-10 | Complete and merged | Stable upstream lock promotion to vyane-rs `319b9da` / rmcp `3.0.1` |
 | VP-11 | Complete and merged | Product documentation introduction (bilingual README, docs.zleo.ai content preparation) |
 | VP-12 | Complete and merged | Cancellation-propagation adoption spike and advisory upstream canary |
-| VP-13 | In progress | Durable-workflow control-plane readiness gate (intermittent CI failure) |
+| VP-13 | Complete and merged | Durable-workflow control-plane readiness gate (intermittent CI failure) |
 
 ## Verified closeout
+
+VP-13 implementation commit
+`8b0d7f20816a4d28c967c453781232a099abf4d0` passed the stable CI lanes in
+GitHub Actions run `30524569341`. Official GLM-5.2 independent review run
+`3730f9b5` returned `CLEAN` with no P0/P1 findings; its P2/P3 observations
+were closed in the same pull request, and the follow-up delta review run
+`b8b28bbc` returned `CLEAN`. PR #17 merged as
+`91d50494c340a04473467f4f4d53cbc7118f4df0`; all five jobs on merge-SHA run
+`30525921843` passed.
 
 VP-12 implementation commit
 `689d77659a9453cf98a97227e5eb775999d56013` passed the CI lanes in GitHub
