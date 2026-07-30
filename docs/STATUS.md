@@ -19,9 +19,9 @@ which of those plans are current.
     bounded multi-model review;
   - durable workflow submit, status, and cancel through explicit Vyane workflow
     tools.
-- Latest completed package: VP-09.
+- Latest completed package: VP-10.
 - Verified main commit:
-  `184b76d0d58fa41f79bb96ac0f9e24b19f5f3f4d`.
+  `bbb603063519eafcd85161341bc1f40b8e9de7b4`.
 
 ## Work-package ledger
 
@@ -36,8 +36,21 @@ which of those plans are current.
 | VP-07 | Complete and merged | Real pinned headless QwenPaw application integration |
 | VP-08 | Complete and merged | Explicit durable workflow submit/status/cancel lifecycle |
 | VP-09 | Complete and merged | Stable MCP capability-negotiation probe (advertised/negotiated/product-claimed separation) |
+| VP-10 | Complete and merged | Stable upstream lock promotion to vyane-rs `319b9da` / rmcp `3.0.1` |
+| VP-11 | Proposed | Product documentation introduction; scope and preconditions in the work package |
 
 ## Verified closeout
+
+VP-10 implementation commit
+`8f7edc16d864a408dfca1f748a82e127bff42ea4` passed all five jobs in GitHub
+Actions run `30508741435`; the advisory candidate canary returned to green
+once the lock matched upstream again. Official GLM-5.2 independent review run
+`e46e510d` returned `CLEAN` with no P0/P1 findings; its two P2 observations
+(README baseline lines, VP-02 tracked evidence) were closed in the same pull
+request, and the final documentation-delta review run `75356365` returned
+`CLEAN`. PR #11 merged as
+`bbb603063519eafcd85161341bc1f40b8e9de7b4`; all five jobs on merge-SHA run
+`30510213480` passed.
 
 VP-09 implementation commit
 `f9bbdcf35a122cc786c44ec4ed7e7195665130e3` passed all five jobs in GitHub
@@ -73,8 +86,11 @@ The following work is explicitly deferred until requested:
 
 - installation, upgrade, rollback, and end-user packaging;
 - screenshots, recording, and competition-submission production;
-- full bilingual README editorial expansion beyond keeping facts aligned;
-- publishing a Vyane Paw section on `docs.zleo.ai`;
+- full bilingual README editorial expansion beyond keeping facts aligned
+  (requested by the owner on 2026-07-30; scope and timing proposed in
+  `work-packages/VP-11.md`);
+- publishing a Vyane Paw section on `docs.zleo.ai` (owner disclosure review
+  first; content preparation is part of the VP-11 proposal);
 - a remote gateway;
 - claiming MCP Tasks support before both pinned endpoints negotiate and pass it.
 
