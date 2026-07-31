@@ -289,6 +289,13 @@ def assert_bounded_success_output(
     if omitted is True:
         if output is not None:
             raise AssertionError("output_omitted=true must drop the output body")
+        # Callers that require a concrete synthetic answer (durable e2e) must
+        # not pass when only the omit flag is present — that proves no body.
+        if expected_output is not None:
+            raise AssertionError(
+                "succeeded workflow-status omitted the answer body "
+                f"(expected {expected_output!r})",
+            )
         return
     if not isinstance(output, str) or output == "":
         raise AssertionError(

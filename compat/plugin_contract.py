@@ -851,6 +851,35 @@ def assert_result_contract(module: Any) -> int:
     assert_operation_result_schema(success_envelope)
     normalized_result_cases += 1
 
+    # expected_output requires a real body: omit-only must not green the e2e path.
+    omit_only = contract.normalize_tool_payload(
+        tool="vyane_workflow_status",
+        mode="workflow-status",
+        policy_profile="contract-test",
+        payload={
+            "caller_id": "0198a140-4d31-7dd4-8bcc-832b9a48cf34",
+            "state": "succeeded",
+            "output_omitted": True,
+        },
+    )
+    try:
+        assert_bounded_success_output(
+            omit_only,
+            expected_output="durable-success-answer",
+        )
+    except AssertionError as exc:
+        if "omitted the answer body" not in str(exc):
+            raise AssertionError(
+                f"omit+expected_output raised wrong error: {exc}",
+            ) from exc
+    else:
+        raise AssertionError(
+            "assert_bounded_success_output accepted omit-only with expected_output",
+        )
+    # Without expected_output, pure omit remains valid (oversized provider answer).
+    assert_bounded_success_output(omit_only)
+    normalized_result_cases += 1
+
     rejected = contract.normalize_tool_payload(
         tool="vyane_dispatch",
         mode="dispatch",
