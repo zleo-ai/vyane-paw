@@ -1,6 +1,6 @@
 # Engineering status and handoff
 
-Last verified: 2026-07-31
+Last verified: 2026-08-01
 
 This page is the canonical starting point for an agent continuing Vyane Paw
 without conversation history. Architecture decisions remain in `docs/` and
@@ -19,9 +19,9 @@ which of those plans are current.
     bounded multi-model review;
   - durable workflow submit, status, and cancel through explicit Vyane workflow
     tools;
-  - succeeded workflow status may include bounded `output` / `output_omitted`
-    (WP-152 pin `03dbd2fd`); Paw projects those fields in `result_contract`.
-- Latest completed package: VP-14 (VP-15 phase one is provider-side only).
+  - durable workflow submit/status/cancel **and** succeeded bounded output
+    retrieval (`output` / `output_omitted`) on pin `03dbd2fd` (VP-15).
+- Latest completed package: VP-15.
 - Verified main commit:
   `4b2aa49e344b302220466853f2ae8d38bd16c2fd`.
 
@@ -43,9 +43,16 @@ which of those plans are current.
 | VP-12 | Complete and merged | Cancellation-propagation adoption spike and advisory upstream canary |
 | VP-13 | Complete and merged | Durable-workflow control-plane readiness gate (intermittent CI failure) |
 | VP-14 | Complete and merged | Durable readiness budget and failure self-diagnosis |
-| VP-15 | Phase two in progress | WP-152 pin `03dbd2fd`; result_contract + durable retrieval assertions landed; hermetic e2e evidence pending healthy daemon |
+| VP-15 | Complete | WP-152 pin `03dbd2fd`; result_contract + dual bound; hermetic run-vp08 with `terminal_succeeded_with_output == 1` |
 
 ## Verified closeout
+
+VP-15 phase two closeout on 2026-08-01: hermetic `scripts/run-vp08.sh`
+against lock pin `03dbd2fd1f1a3f7d6d7f8aa9396c6ce55b5d22f0` returned
+`result == "passed"` with `metrics.terminal_succeeded_with_output == 1`
+(cancel lifecycle plus submit → succeeded → bounded answer retrieval).
+`scripts/check-repository.sh` green. Paw-side commits may still be local
+ahead of `origin/main` until push/PR.
 
 VP-14 implementation commit
 `a920719f179702f14a623f5c54fe68bb25892b34` passed all five jobs in GitHub
@@ -122,18 +129,12 @@ checks after a new change.
 The owner approved three next directions on 2026-07-30; they are the
 intended continuation order for a new agent picking up this repository:
 
-1. **VP-15 phase two closeout: hermetic durable success-output evidence.**
-   Consumer projection and retrieval assertions are in-tree against lock pin
-   `03dbd2fd` (WP-152 / PR #107). Next: green `bash scripts/run-vp08.sh` with
-   `terminal_succeeded_with_output == 1` (or CI durable-workflow job), then
-   independent review and merge of the Paw commits. VP-14/VP-12 remain
-   standing watches only.
-2. **Durable-failure forensics, standing watch.** VP-14 made every
+1. **Durable-failure forensics, standing watch.** VP-14 made every
    durable-workflow CI failure dump bounded runtime-log tails. If the
    `durable-workflow` job fails again, read the tails first; only then
    decide whether a bounded daemon-connect retry belongs in vyane-rs.
    No standing change is needed while it stays green.
-3. **agentscope / MCP SDK v2 adoption, standing watch.** The VP-12 canary
+2. **agentscope / MCP SDK v2 adoption, standing watch.** The VP-12 canary
    (`scripts/run-vp12.sh`, advisory candidate lane) fails loudly once a
    current agentscope release allows `mcp` 2.x. When it fires, re-run the
    full ADR-0003 QwenPaw-plus-SDK-v2 spike before changing any claim.

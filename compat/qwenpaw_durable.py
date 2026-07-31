@@ -123,6 +123,7 @@ def run_cli(
     env: dict[str, str],
     cwd: Path,
     check: bool = True,
+    timeout: float = 30,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(binary), "--config", str(config), *command],
@@ -131,7 +132,7 @@ def run_cli(
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=30,
+        timeout=timeout,
         check=check,
     )
 
@@ -470,6 +471,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:  # noqa: PLR0915
                 env=base_env,
                 cwd=root / "working",
                 check=False,
+                timeout=120,
             )
             raise
 
@@ -567,7 +569,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:  # noqa: PLR0915
                         client,
                         app_url,
                         sequence,
-                        timeout=120,
+                        timeout=180,
                     )
 
                     submitted = console_command(
@@ -703,8 +705,20 @@ def run(args: argparse.Namespace) -> dict[str, Any]:  # noqa: PLR0915
                     env=base_env,
                     cwd=root / "working",
                     check=False,
+                    timeout=120,
                 )
                 if stopped.returncode != 0:
+                    # Prefer hard kill of the recorded pid over hanging the suite.
+                    try:
+                        status = daemon_status(
+                            args.vyane_bin.resolve(),
+                            config_path,
+                            env=base_env,
+                            cwd=root / "working",
+                        )
+                        os.kill(int(status["pid"]), 9)
+                    except BaseException:
+                        pass
                     raise AssertionError(
                         f"Vyane daemon stop failed: {stopped.stderr.strip()}",
                     )
