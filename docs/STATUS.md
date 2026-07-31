@@ -19,8 +19,8 @@ which of those plans are current.
     bounded multi-model review;
   - durable workflow submit, status, and cancel through explicit Vyane workflow
     tools;
-  - (after lock pin `03dbd2fd`) succeeded workflow status may include bounded
-    `output` / `output_omitted` from WP-152; Paw phase-two projection is open.
+  - succeeded workflow status may include bounded `output` / `output_omitted`
+    (WP-152 pin `03dbd2fd`); Paw projects those fields in `result_contract`.
 - Latest completed package: VP-14 (VP-15 phase one is provider-side only).
 - Verified main commit:
   `4b2aa49e344b302220466853f2ae8d38bd16c2fd`.
@@ -43,7 +43,7 @@ which of those plans are current.
 | VP-12 | Complete and merged | Cancellation-propagation adoption spike and advisory upstream canary |
 | VP-13 | Complete and merged | Durable-workflow control-plane readiness gate (intermittent CI failure) |
 | VP-14 | Complete and merged | Durable readiness budget and failure self-diagnosis |
-| VP-15 | Phase one landed (provider); phase two open | vyane-rs WP-152 merged as `03dbd2fd` (PR #107); Paw result-contract phase two remains |
+| VP-15 | Phase two in progress | WP-152 pin `03dbd2fd`; result_contract + durable retrieval assertions landed; hermetic e2e evidence pending healthy daemon |
 
 ## Verified closeout
 
@@ -122,13 +122,12 @@ checks after a new change.
 The owner approved three next directions on 2026-07-30; they are the
 intended continuation order for a new agent picking up this repository:
 
-1. **VP-15 phase two: durable workflow output retrieval (Paw)**. Provider
-   phase one is **merged** as vyane-rs **WP-152** / PR #107 /
-   `03dbd2fd1f1a3f7d6d7f8aa9396c6ce55b5d22f0` (plan was renumbered from
-   WP-127/128/151 after CI isolation packages claimed those ids). Stable
-   lock should pin that SHA; then project `output` / `output_omitted`
-   through `result_contract`, extend operation-result schema, and prove
-   submit → succeeded → bounded retrieval in `compat/qwenpaw_durable.py`.
+1. **VP-15 phase two closeout: hermetic durable success-output evidence.**
+   Consumer projection and retrieval assertions are in-tree against lock pin
+   `03dbd2fd` (WP-152 / PR #107). Next: green `bash scripts/run-vp08.sh` with
+   `terminal_succeeded_with_output == 1` (or CI durable-workflow job), then
+   independent review and merge of the Paw commits. VP-14/VP-12 remain
+   standing watches only.
 2. **Durable-failure forensics, standing watch.** VP-14 made every
    durable-workflow CI failure dump bounded runtime-log tails. If the
    `durable-workflow` job fails again, read the tails first; only then

@@ -43,6 +43,7 @@ DURABLE_TOOLS = [
     "vyane_workflow_submit",
 ]
 DURABLE_TASK = "DURABLE_WORKFLOW_TASK_MUST_NOT_ENTER_LOGS"
+DURABLE_SUCCESS_ANSWER = "durable-success-answer"
 
 
 def parse_args() -> argparse.Namespace:
@@ -253,6 +254,52 @@ def assert_contract(
     if caller_id is not None and result_id != caller_id:
         raise AssertionError("durable lifecycle target changed")
     return result_id, state
+
+
+def assert_bounded_success_output(
+    payload: dict[str, Any],
+    *,
+    expected_output: str | None = None,
+) -> None:
+    """Require succeeded workflow-status to expose a bounded retrieval result.
+
+    The product path is: MCP status → result_contract projection → data.output
+    or data.output_omitted. Non-succeeded statuses must not carry either field.
+    """
+    if payload.get("tool") != "vyane_workflow_status":
+        raise AssertionError("success-output assertion requires workflow-status")
+    if payload.get("operation_status") != "completed":
+        raise AssertionError("success-output assertion requires completed operation")
+    if payload.get("outcome") != "success":
+        raise AssertionError("success-output assertion requires success outcome")
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise AssertionError("success-output assertion missing data")
+    if data.get("state") != "succeeded":
+        raise AssertionError(
+            f"success-output assertion requires state=succeeded, got {data.get('state')}",
+        )
+    for forbidden in ("owner", "controller", "lease", "error", "prompt", "path"):
+        if forbidden in data:
+            raise AssertionError(
+                f"succeeded workflow-status leaked redacted field {forbidden!r}",
+            )
+    output = data.get("output")
+    omitted = data.get("output_omitted")
+    if omitted is True:
+        if output is not None:
+            raise AssertionError("output_omitted=true must drop the output body")
+        return
+    if not isinstance(output, str) or output == "":
+        raise AssertionError(
+            "succeeded workflow-status omitted both output and output_omitted",
+        )
+    if len(output.encode("utf-8")) > 64 * 1024:
+        raise AssertionError("succeeded workflow-status output exceeded Paw bound")
+    if expected_output is not None and output != expected_output:
+        raise AssertionError(
+            "succeeded workflow-status output did not match synthetic answer",
+        )
 
 
 def assert_task_absent_from_logs(root: Path) -> None:
@@ -594,6 +641,48 @@ def run(args: argparse.Namespace) -> dict[str, Any]:  # noqa: PLR0915
                         raise AssertionError(
                             "workflow never reached the synthetic provider",
                         )
+
+                    # VP-15: after cancel lifecycle, prove submit → succeeded →
+                    # bounded output retrieval through the same product surface.
+                    endpoint_state.delay_seconds = 0
+                    endpoint_state.answer = DURABLE_SUCCESS_ANSWER
+                    success_submitted = console_command(
+                        client,
+                        app_url,
+                        f"/vyane workflow-submit slow -- {DURABLE_TASK}",
+                        sequence,
+                    )
+                    sequence += 1
+                    success_id, success_submit_state = assert_contract(
+                        success_submitted,
+                        tool="vyane_workflow_submit",
+                        mode="workflow-submit",
+                    )
+                    if success_submit_state not in {"queued", "running", "succeeded"}:
+                        raise AssertionError(
+                            "success-path workflow submit was not accepted",
+                        )
+                    success_status, sequence = wait_for_workflow_state(
+                        client,
+                        app_url,
+                        success_id,
+                        {"succeeded"},
+                        sequence=sequence,
+                        timeout=30,
+                    )
+                    _, success_state = assert_contract(
+                        success_status,
+                        tool="vyane_workflow_status",
+                        mode="workflow-status",
+                        caller_id=success_id,
+                    )
+                    if success_state != "succeeded":
+                        raise AssertionError("success-path workflow was not terminal")
+                    assert_bounded_success_output(
+                        success_status,
+                        expected_output=DURABLE_SUCCESS_ANSWER,
+                    )
+
                     mcp_pid = wait_for_pid_file(root / "vyane-mcp.pid", 10)
             app_exit_code = stop_app(app_process)
         finally:
@@ -643,8 +732,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:  # noqa: PLR0915
             "repeated_cancel_requests": 2,
             "task_log_leaks": 0,
             "terminal_cancelled": 1,
+            "terminal_succeeded_with_output": 1,
             "workflow_control_readiness_polls": readiness_polls,
-            "workflow_submitted": 1,
+            "workflow_submitted": 2,
         },
         "limitations": [
             "fixed single-step read-only workflow only",

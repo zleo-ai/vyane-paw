@@ -827,6 +827,30 @@ def assert_result_contract(module: Any) -> int:
     assert_operation_result_schema(oversized)
     normalized_result_cases += 1
 
+    # Durable retrieval assertion (same helper as qwenpaw_durable e2e) on the
+    # shipped normalizer envelope — drives the real product projection path.
+    from qwenpaw_durable import assert_bounded_success_output
+
+    success_envelope = contract.normalize_tool_payload(
+        tool="vyane_workflow_status",
+        mode="workflow-status",
+        policy_profile="contract-test",
+        payload={
+            "caller_id": "0198a140-4d31-7dd4-8bcc-832b9a48cf34",
+            "state": "succeeded",
+            "output": "durable-success-answer",
+            "owner": "must-not-project",
+        },
+    )
+    assert_bounded_success_output(
+        success_envelope,
+        expected_output="durable-success-answer",
+    )
+    if "owner" in (success_envelope.get("data") or {}):
+        raise AssertionError("result_contract projected forbidden owner field")
+    assert_operation_result_schema(success_envelope)
+    normalized_result_cases += 1
+
     rejected = contract.normalize_tool_payload(
         tool="vyane_dispatch",
         mode="dispatch",

@@ -82,7 +82,8 @@ jq -e \
    and .metrics.repeated_cancel_requests >= 2
    and .metrics.task_log_leaks == 0
    and .metrics.terminal_cancelled == 1
-   and .metrics.workflow_submitted == 1' \
+   and .metrics.terminal_succeeded_with_output == 1
+   and .metrics.workflow_submitted >= 2' \
   "$evidence_path" \
   >/dev/null
 
