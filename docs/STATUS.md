@@ -23,7 +23,7 @@ which of those plans are current.
     retrieval (`output` / `output_omitted`) on pin `03dbd2fd` (VP-15).
 - Latest completed package: VP-15.
 - Verified main commit:
-  `4b2aa49e344b302220466853f2ae8d38bd16c2fd`.
+  `ae45844509ba519da9c6fe4c9e7b6c7bfb2b4c2c`.
 
 ## Work-package ledger
 
@@ -43,7 +43,7 @@ which of those plans are current.
 | VP-12 | Complete and merged | Cancellation-propagation adoption spike and advisory upstream canary |
 | VP-13 | Complete and merged | Durable-workflow control-plane readiness gate (intermittent CI failure) |
 | VP-14 | Complete and merged | Durable readiness budget and failure self-diagnosis |
-| VP-15 | Complete | WP-152 pin `03dbd2fd`; result_contract + dual bound; hermetic run-vp08 with `terminal_succeeded_with_output == 1` |
+| VP-15 | Complete and merged | WP-152 pin `03dbd2fd`; result_contract + dual bound; hermetic run-vp08 with `terminal_succeeded_with_output == 1` (PR #22) |
 
 ## Verified closeout
 
@@ -51,8 +51,10 @@ VP-15 phase two closeout on 2026-08-01: hermetic `scripts/run-vp08.sh`
 against lock pin `03dbd2fd1f1a3f7d6d7f8aa9396c6ce55b5d22f0` returned
 `result == "passed"` with `metrics.terminal_succeeded_with_output == 1`
 (cancel lifecycle plus submit → succeeded → bounded answer retrieval).
-`scripts/check-repository.sh` green. Paw-side commits may still be local
-ahead of `origin/main` until push/PR.
+`scripts/check-repository.sh` green. Merged as PR #22
+(`ae45844509ba519da9c6fe4c9e7b6c7bfb2b4c2c`); independent reviews Kimi Code
+`b344132e`/`1672b4fa` and K3 `509e260f`/`80fb573f`; CI run `30705266697` green
+after one durable SQLite-busy flake rerun.
 
 VP-14 implementation commit
 `a920719f179702f14a623f5c54fe68bb25892b34` passed all five jobs in GitHub
