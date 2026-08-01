@@ -107,7 +107,7 @@ VP-04（竞赛材料）与 VP-05（安装/打包）为有意暂缓项；完整�
 
 - 产品名：**Vyane Paw**；仓库 `vyane-paw`；可见性：private
 - QwenPaw `ebb5b24d0b2559af51d71a38547d88d384357a64`
-- `vyane-rs` `319b9da521e3242b482dff46cf92f676b5f38686`
+- `vyane-rs` `03dbd2fd1f1a3f7d6d7f8aa9396c6ce55b5d22f0`
 - `rmcp` `3.0.1`
 
 ## 仓库地图
