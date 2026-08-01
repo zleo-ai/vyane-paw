@@ -6,7 +6,8 @@ The first proof uses the revisions in `upstreams.lock.json`:
 
 - QwenPaw `ebb5b24d0b2559af51d71a38547d88d384357a64` and its Python MCP
   client with a stateful initialization lifecycle.
-- `vyane-rs` at `319b9da521e3242b482dff46cf92f676b5f38686`.
+- `vyane-rs` at `03dbd2fd1f1a3f7d6d7f8aa9396c6ce55b5d22f0` (WP-152 workflow
+  success-output projection; prior pin `319b9da` was VP-10).
 - Rust SDK `rmcp` `3.0.1`.
 - stdio transport.
 

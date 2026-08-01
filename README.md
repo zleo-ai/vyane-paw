@@ -120,7 +120,7 @@ deliberately deferred; the full ledger is in
 
 - Product name: **Vyane Paw**; repository `vyane-paw`; visibility: private
 - QwenPaw `ebb5b24d0b2559af51d71a38547d88d384357a64`
-- `vyane-rs` `319b9da521e3242b482dff46cf92f676b5f38686`
+- `vyane-rs` `03dbd2fd1f1a3f7d6d7f8aa9396c6ce55b5d22f0`
 - `rmcp` `3.0.1`
 
 ## Repository map

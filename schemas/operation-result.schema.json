@@ -73,7 +73,38 @@
       ]
     },
     "data": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "caller_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "cancelling",
+            "succeeded",
+            "failed",
+            "timed_out",
+            "cancelled",
+            "interrupted"
+          ]
+        },
+        "failure_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "output": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "output_omitted": {
+          "type": "boolean"
+        }
+      }
     },
     "correlation": {
       "type": "object",

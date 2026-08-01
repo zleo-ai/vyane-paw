@@ -2,11 +2,11 @@
   "schema_version": "0.1.0",
   "scenario": "compatibility",
   "sanitization_state": "sanitized",
-  "started_at": "2026-07-30T02:28:18.452754+00:00",
+  "started_at": "2026-08-01T14:45:53.220053+00:00",
   "duration_ms": 29,
   "upstream_revisions": {
     "qwenpaw": "ebb5b24d0b2559af51d71a38547d88d384357a64",
-    "vyane_rs": "319b9da521e3242b482dff46cf92f676b5f38686",
+    "vyane_rs": "03dbd2fd1f1a3f7d6d7f8aa9396c6ce55b5d22f0",
     "rmcp": "3.0.1",
     "python_mcp": "1.29.0"
   },

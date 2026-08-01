@@ -11,6 +11,8 @@ from typing import Any
 
 RESULT_SCHEMA_VERSION = "0.1.0"
 _FINAL_OPERATION = "completed"
+# Align with vyane-rs WORKFLOW_VIEW_OUTPUT_MAX_BYTES (UTF-8 bytes).
+_WORKFLOW_OUTPUT_MAX_BYTES = 64 * 1024
 _SAFE_CODE = re.compile(r"^[a-z0-9_.-]{1,128}$")
 _UUID7 = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
@@ -208,7 +210,41 @@ def _project_completed_payload(
             ),
         )
     if tool in _WORKFLOW_TOOLS:
-        return _select(payload, ("caller_id", "state", "failure_code"))
+        # Additive WP-152 fields: only present on succeeded status when the
+        # provider projects them; _select drops missing keys.
+        projected = _select(
+            payload,
+            (
+                "caller_id",
+                "state",
+                "failure_code",
+                "output",
+                "output_omitted",
+            ),
+        )
+        state = str(payload.get("state") or "")
+        if state != "succeeded":
+            projected.pop("output", None)
+            projected.pop("output_omitted", None)
+            return projected
+        raw_output = projected.get("output")
+        if isinstance(raw_output, str):
+            if len(raw_output.encode("utf-8")) > _WORKFLOW_OUTPUT_MAX_BYTES:
+                projected.pop("output", None)
+                projected["output_omitted"] = True
+        elif "output" in projected:
+            # Non-string bodies cannot be shipped as the answer field; drop them
+            # and mark omission so the envelope is not silently empty.
+            projected.pop("output", None)
+            projected["output_omitted"] = True
+        omitted = projected.get("output_omitted")
+        if omitted is not None and not isinstance(omitted, bool):
+            projected.pop("output_omitted", None)
+            omitted = projected.get("output_omitted")
+        # Trust boundary: never keep a body when the omit flag is true.
+        if omitted is True:
+            projected.pop("output", None)
+        return projected
     projected = _select(
         payload,
         (

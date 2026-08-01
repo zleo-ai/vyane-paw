@@ -756,6 +756,16 @@ def assert_result_contract(module: Any) -> int:
             ("completed", "failure", "full"),
         ),
         (
+            "vyane_workflow_status",
+            "workflow-status",
+            {
+                "caller_id": "0198a140-4d31-7dd4-8bcc-832b9a48cf34",
+                "state": "succeeded",
+                "output": "bounded-answer",
+            },
+            ("completed", "success", "full"),
+        ),
+        (
             "vyane_workflow_cancel",
             "workflow-cancel",
             {
@@ -782,7 +792,93 @@ def assert_result_contract(module: Any) -> int:
         if normalized["retry_guidance"] != "do_not_retry":
             raise AssertionError(f"{mode} result became retryable")
         assert_operation_result_schema(normalized)
+        if (
+            tool == "vyane_workflow_status"
+            and payload.get("state") == "succeeded"
+            and payload.get("output") == "bounded-answer"
+        ):
+            data = normalized.get("data") or {}
+            if data.get("output") != "bounded-answer":
+                raise AssertionError("workflow success output was not projected")
+            if "failure_code" in data:
+                raise AssertionError("succeeded workflow leaked failure_code")
+        if tool == "vyane_workflow_status" and payload.get("state") == "failed":
+            data = normalized.get("data") or {}
+            if "output" in data or "output_omitted" in data:
+                raise AssertionError("failed workflow projected success output fields")
         normalized_result_cases += 1
+
+    # Oversized workflow answer is omitted at the Paw layer (dual bound).
+    oversized = contract.normalize_tool_payload(
+        tool="vyane_workflow_status",
+        mode="workflow-status",
+        policy_profile="contract-test",
+        payload={
+            "caller_id": "0198a140-4d31-7dd4-8bcc-832b9a48cf34",
+            "state": "succeeded",
+            "output": "x" * (64 * 1024 + 1),
+        },
+    )
+    oversized_data = oversized.get("data") or {}
+    if "output" in oversized_data:
+        raise AssertionError("oversized workflow output was not dropped")
+    if oversized_data.get("output_omitted") is not True:
+        raise AssertionError("oversized workflow output did not set output_omitted")
+    assert_operation_result_schema(oversized)
+    normalized_result_cases += 1
+
+    # Durable retrieval assertion (same helper as qwenpaw_durable e2e) on the
+    # shipped normalizer envelope — drives the real product projection path.
+    from qwenpaw_durable import assert_bounded_success_output
+
+    success_envelope = contract.normalize_tool_payload(
+        tool="vyane_workflow_status",
+        mode="workflow-status",
+        policy_profile="contract-test",
+        payload={
+            "caller_id": "0198a140-4d31-7dd4-8bcc-832b9a48cf34",
+            "state": "succeeded",
+            "output": "durable-success-answer",
+            "owner": "must-not-project",
+        },
+    )
+    assert_bounded_success_output(
+        success_envelope,
+        expected_output="durable-success-answer",
+    )
+    if "owner" in (success_envelope.get("data") or {}):
+        raise AssertionError("result_contract projected forbidden owner field")
+    assert_operation_result_schema(success_envelope)
+    normalized_result_cases += 1
+
+    # expected_output requires a real body: omit-only must not green the e2e path.
+    omit_only = contract.normalize_tool_payload(
+        tool="vyane_workflow_status",
+        mode="workflow-status",
+        policy_profile="contract-test",
+        payload={
+            "caller_id": "0198a140-4d31-7dd4-8bcc-832b9a48cf34",
+            "state": "succeeded",
+            "output_omitted": True,
+        },
+    )
+    try:
+        assert_bounded_success_output(
+            omit_only,
+            expected_output="durable-success-answer",
+        )
+    except AssertionError as exc:
+        if "omitted the answer body" not in str(exc):
+            raise AssertionError(
+                f"omit+expected_output raised wrong error: {exc}",
+            ) from exc
+    else:
+        raise AssertionError(
+            "assert_bounded_success_output accepted omit-only with expected_output",
+        )
+    # Without expected_output, pure omit remains valid (oversized provider answer).
+    assert_bounded_success_output(omit_only)
+    normalized_result_cases += 1
 
     rejected = contract.normalize_tool_payload(
         tool="vyane_dispatch",
