@@ -233,10 +233,17 @@ def _project_completed_payload(
                 projected.pop("output", None)
                 projected["output_omitted"] = True
         elif "output" in projected:
+            # Non-string bodies cannot be shipped as the answer field; drop them
+            # and mark omission so the envelope is not silently empty.
             projected.pop("output", None)
+            projected["output_omitted"] = True
         omitted = projected.get("output_omitted")
         if omitted is not None and not isinstance(omitted, bool):
             projected.pop("output_omitted", None)
+            omitted = projected.get("output_omitted")
+        # Trust boundary: never keep a body when the omit flag is true.
+        if omitted is True:
+            projected.pop("output", None)
         return projected
     projected = _select(
         payload,

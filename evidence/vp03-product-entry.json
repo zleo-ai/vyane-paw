@@ -2,8 +2,8 @@
   "schema_version": "0.1.0",
   "scenario": "product_entry",
   "sanitization_state": "sanitized",
-  "started_at": "2026-08-01T14:45:53.220053+00:00",
-  "duration_ms": 437,
+  "started_at": "2026-08-01T15:08:15.029997+00:00",
+  "duration_ms": 422,
   "upstream_revisions": {
     "qwenpaw": "ebb5b24d0b2559af51d71a38547d88d384357a64",
     "vyane_rs": "03dbd2fd1f1a3f7d6d7f8aa9396c6ce55b5d22f0",
@@ -19,7 +19,7 @@
     "pinned_runtime_contracts": 12,
     "request_scoped_tool_boundaries": 4,
     "enforced_policy_denials": 9,
-    "normalized_result_cases": 14,
+    "normalized_result_cases": 18,
     "result_middleware_rewrites": 1,
     "durable_workflow_commands": 3,
     "fixed_private_paths": 0
