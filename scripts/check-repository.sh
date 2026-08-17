@@ -68,7 +68,9 @@ git grep --untracked -n -E \
   'sanitization_state.*publishable' \
   -- \
   ':(glob)compat/**/*.py' \
+  ':(glob)compat/**/*.sh' \
   ':(glob)qwenpaw-plugin/**/*.py' \
+  ':(glob)qwenpaw-plugin/**/*.sh' \
   ':(glob)scripts/**/*.py' \
   ':(glob)scripts/**/*.sh' \
   ':(exclude)scripts/check-repository.sh'
