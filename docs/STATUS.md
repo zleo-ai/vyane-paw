@@ -1,6 +1,6 @@
 # Engineering status and handoff
 
-Last verified: 2026-08-01
+Last verified: 2026-08-17
 
 This page is the canonical starting point for an agent continuing Vyane Paw
 without conversation history. Architecture decisions remain in `docs/` and
@@ -21,9 +21,9 @@ which of those plans are current.
     tools;
   - durable workflow submit/status/cancel **and** succeeded bounded output
     retrieval (`output` / `output_omitted`) on pin `03dbd2fd` (VP-15).
-- Latest completed package: VP-15.
+- Latest completed package: VP-16.
 - Verified main commit:
-  `ae45844509ba519da9c6fe4c9e7b6c7bfb2b4c2c`.
+  `65a31e38614629a923ccaa396afe53a7f2f972fd`.
 
 ## Work-package ledger
 
@@ -44,9 +44,20 @@ which of those plans are current.
 | VP-13 | Complete and merged | Durable-workflow control-plane readiness gate (intermittent CI failure) |
 | VP-14 | Complete and merged | Durable readiness budget and failure self-diagnosis |
 | VP-15 | Complete and merged | WP-152 pin `03dbd2fd`; result_contract + dual bound; hermetic run-vp08 with `terminal_succeeded_with_output == 1` (PR #22) |
-| VP-16 | In progress | Public workflows move to hosted-only CI; repository runner registration retires after hosted evidence |
+| VP-16 | Complete and merged | Public workflows use hosted-only CI; repository runner registration removed after PR/main evidence |
 
 ## Verified closeout
+
+VP-16 closeout on 2026-08-17: all public workflow jobs use the exact
+`ubuntu-24.04` allowlist, and the fail-closed trust-boundary checker rejects
+self-hosted/custom runners, dynamic expressions, dangerous events, and reusable
+workflow jobs. Final implementation head
+`04c901a7cfafc4cc11edd38273355fb728e08e78` passed independent review and all
+five jobs in pull-request run `31998140166`. PR #24 merged as
+`65a31e38614629a923ccaa396afe53a7f2f972fd`; all five jobs passed again in
+merged-main run `31999107556`. Operator-recorded sequence: after confirming
+that run had passed, the offline `rog-wsl-vyane-paw` runner (ID `2`) was
+deleted; a subsequent repository runner API query reported `total_count: 0`.
 
 VP-15 phase two closeout on 2026-08-01: hermetic `scripts/run-vp08.sh`
 against lock pin `03dbd2fd1f1a3f7d6d7f8aa9396c6ce55b5d22f0` returned
@@ -129,10 +140,9 @@ checks after a new change.
 
 ## Current priorities
 
-VP-16 is an active security migration. Until its hosted workflow boundary is
-reviewed and merged, the registered `rog-wsl-vyane-paw` runner remains offline.
-After hosted checks pass on `main`, its repository registration is removed;
-future lightweight local CI must live in a separate private control plane.
+VP-16 is complete. The public repository has no registered self-hosted runner;
+future lightweight local CI, if needed, must live in a separate private
+control plane and cannot be a public-PR fallback or required check.
 
 The owner approved three next directions on 2026-07-30; they are the
 intended continuation order for a new agent picking up this repository:
