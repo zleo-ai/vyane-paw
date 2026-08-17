@@ -7,13 +7,19 @@ cd "$repo_root"
 bash -n bin/* scripts/*.sh
 uv lock --check --project compat/qwenpaw-app
 
+uv run --project compat --locked \
+  python scripts/check_workflow_trust_boundary.py --self-test
+uv run --project compat --locked \
+  python scripts/check_workflow_trust_boundary.py
+
 for file in upstreams.lock.json schemas/*.json config/examples/*.json evidence/*.json; do
   jq empty "$file"
 done
 
-uv run --project compat --locked ruff check compat/*.py qwenpaw-plugin/*.py
+uv run --project compat --locked ruff check \
+  compat/*.py qwenpaw-plugin/*.py scripts/check_workflow_trust_boundary.py
 uv run --project compat --locked ruff format --check \
-  compat/*.py qwenpaw-plugin/*.py
+  compat/*.py qwenpaw-plugin/*.py scripts/check_workflow_trust_boundary.py
 uv run --project compat --locked python compat/plugin_contract.py
 ./scripts/test-product-entry.sh
 uv run --project compat --locked check-jsonschema \
@@ -58,15 +64,19 @@ case "$schema_status" in
 esac
 
 set +e
-rg -n \
-  --glob '*.py' \
-  --glob '*.sh' \
-  --glob '!check-repository.sh' \
+git grep --untracked -n -E \
   'sanitization_state.*publishable' \
-  compat qwenpaw-plugin scripts
-rg_status=$?
+  -- \
+  ':(glob)compat/**/*.py' \
+  ':(glob)compat/**/*.sh' \
+  ':(glob)qwenpaw-plugin/**/*.py' \
+  ':(glob)qwenpaw-plugin/**/*.sh' \
+  ':(glob)scripts/**/*.py' \
+  ':(glob)scripts/**/*.sh' \
+  ':(exclude)scripts/check-repository.sh'
+grep_status=$?
 set -e
-case "$rg_status" in
+case "$grep_status" in
   0)
     echo "A generator can mark evidence publishable." >&2
     exit 1

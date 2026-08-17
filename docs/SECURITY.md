@@ -22,6 +22,22 @@ authority.
 7. A future remote gateway must add authentication, tenant isolation, replay
    protection, rate limits, audit retention, and transport security before use.
 
+## CI runner trust boundary
+
+- This public repository has no self-hosted workflow. Pull requests, pushes,
+  schedules, and manual checks all run on the explicit GitHub-hosted runner
+  allowlist.
+- `pull_request_target`, `workflow_run`, `repository_dispatch`, reusable
+  workflow jobs, dynamic runner expressions, and custom runner labels are
+  rejected by the repository checker.
+- A lightweight local runner, if retained, belongs to a separate private
+  control repository. It must fetch an explicitly trusted revision and cannot
+  be a fallback or required check for this public repository.
+- Hosted setup actions run without cache upload so untrusted pull-request data
+  is not persisted as a repository cache.
+- `scripts/check_workflow_trust_boundary.py` enforces this boundary as part of
+  `scripts/check-repository.sh`.
+
 ## Evidence states
 
 - `raw`: local only and never committed.

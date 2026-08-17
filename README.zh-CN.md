@@ -2,7 +2,7 @@
 
 Vyane Paw 是连接
 [QwenPaw](https://github.com/agentscope-ai/QwenPaw) 与
-[vyane-rs](https://github.com/zleo-ai/vyane-rs) 的私有集成与产品化仓。它把
+[vyane-rs](https://github.com/zleo-ai/vyane-rs) 的公开集成与产品化仓。它把
 "QwenPaw 调用 Vyane 的多模型执行能力"做成一条有产品形态、受策略约束、
 有证据背书的路径，而不是临时胶水。
 
@@ -105,7 +105,7 @@ VP-04（竞赛材料）与 VP-05（安装/打包）为有意暂缓项；完整�
 
 ## 当前基线
 
-- 产品名：**Vyane Paw**；仓库 `vyane-paw`；可见性：private
+- 产品名：**Vyane Paw**；仓库 `vyane-paw`；可见性：public
 - QwenPaw `ebb5b24d0b2559af51d71a38547d88d384357a64`
 - `vyane-rs` `03dbd2fd1f1a3f7d6d7f8aa9396c6ce55b5d22f0`
 - `rmcp` `3.0.1`

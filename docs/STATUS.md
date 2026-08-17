@@ -9,9 +9,9 @@ which of those plans are current.
 
 ## Current baseline
 
-- Repository role: private integration and productization layer between
-  QwenPaw and vyane-rs; it is neither an upstream fork nor a second Vyane
-  implementation.
+- Repository role: public integration and productization layer between QwenPaw
+  and vyane-rs; it is neither an upstream fork nor a second Vyane
+  implementation. Public CI is restricted to GitHub-hosted runners by VP-16.
 - Integration: local stdio MCP through QwenPaw's governed MCP driver.
 - Stable upstream revisions: use the exact values in `upstreams.lock.json`.
 - Stable product surface:
@@ -44,6 +44,7 @@ which of those plans are current.
 | VP-13 | Complete and merged | Durable-workflow control-plane readiness gate (intermittent CI failure) |
 | VP-14 | Complete and merged | Durable readiness budget and failure self-diagnosis |
 | VP-15 | Complete and merged | WP-152 pin `03dbd2fd`; result_contract + dual bound; hermetic run-vp08 with `terminal_succeeded_with_output == 1` (PR #22) |
+| VP-16 | In progress | Public workflows move to hosted-only CI; repository runner registration retires after hosted evidence |
 
 ## Verified closeout
 
@@ -127,6 +128,11 @@ These identifiers are historical evidence, not a substitute for rerunning
 checks after a new change.
 
 ## Current priorities
+
+VP-16 is an active security migration. Until its hosted workflow boundary is
+reviewed and merged, the registered `rog-wsl-vyane-paw` runner remains offline.
+After hosted checks pass on `main`, its repository registration is removed;
+future lightweight local CI must live in a separate private control plane.
 
 The owner approved three next directions on 2026-07-30; they are the
 intended continuation order for a new agent picking up this repository:
