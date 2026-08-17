@@ -64,15 +64,17 @@ case "$schema_status" in
 esac
 
 set +e
-rg -n \
-  --glob '*.py' \
-  --glob '*.sh' \
-  --glob '!check-repository.sh' \
+git grep --untracked -n -E \
   'sanitization_state.*publishable' \
-  compat qwenpaw-plugin scripts
-rg_status=$?
+  -- \
+  ':(glob)compat/**/*.py' \
+  ':(glob)qwenpaw-plugin/**/*.py' \
+  ':(glob)scripts/**/*.py' \
+  ':(glob)scripts/**/*.sh' \
+  ':(exclude)scripts/check-repository.sh'
+grep_status=$?
 set -e
-case "$rg_status" in
+case "$grep_status" in
   0)
     echo "A generator can mark evidence publishable." >&2
     exit 1
