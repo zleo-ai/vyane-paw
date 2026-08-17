@@ -7,13 +7,19 @@ cd "$repo_root"
 bash -n bin/* scripts/*.sh
 uv lock --check --project compat/qwenpaw-app
 
+uv run --project compat --locked \
+  python scripts/check_workflow_trust_boundary.py --self-test
+uv run --project compat --locked \
+  python scripts/check_workflow_trust_boundary.py
+
 for file in upstreams.lock.json schemas/*.json config/examples/*.json evidence/*.json; do
   jq empty "$file"
 done
 
-uv run --project compat --locked ruff check compat/*.py qwenpaw-plugin/*.py
+uv run --project compat --locked ruff check \
+  compat/*.py qwenpaw-plugin/*.py scripts/check_workflow_trust_boundary.py
 uv run --project compat --locked ruff format --check \
-  compat/*.py qwenpaw-plugin/*.py
+  compat/*.py qwenpaw-plugin/*.py scripts/check_workflow_trust_boundary.py
 uv run --project compat --locked python compat/plugin_contract.py
 ./scripts/test-product-entry.sh
 uv run --project compat --locked check-jsonschema \

@@ -1,6 +1,6 @@
 # Vyane Paw
 
-Vyane Paw is the private integration and productization layer between
+Vyane Paw is the public integration and productization layer between
 [QwenPaw](https://github.com/agentscope-ai/QwenPaw) and
 [vyane-rs](https://github.com/zleo-ai/vyane-rs). It turns "a QwenPaw agent
 calling Vyane's multi-model execution" into a supported, policy-bounded,
@@ -118,7 +118,7 @@ deliberately deferred; the full ledger is in
 
 ## Current baseline
 
-- Product name: **Vyane Paw**; repository `vyane-paw`; visibility: private
+- Product name: **Vyane Paw**; repository `vyane-paw`; visibility: public
 - QwenPaw `ebb5b24d0b2559af51d71a38547d88d384357a64`
 - `vyane-rs` `03dbd2fd1f1a3f7d6d7f8aa9396c6ce55b5d22f0`
 - `rmcp` `3.0.1`

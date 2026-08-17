@@ -2,7 +2,7 @@
 
 ## Repository role
 
-`vyane-paw` is a private integration and productization repository connecting
+`vyane-paw` is a public integration and productization repository connecting
 QwenPaw with Vyane. It owns adapters, safe configuration examples, compatibility
 tests, demo flows, evidence schemas, and delivery documentation. It does not fork
 or mirror either upstream runtime.
@@ -44,5 +44,5 @@ or mirror either upstream runtime.
 - Independent model review defaults to GLM-5.2 through an official subscription
   plan. Local profile names and credentials are deployment-specific and must
   not be committed. Do not silently substitute a relay or another model.
-- Keep the repository private until the product boundary and disclosure plan
-  have been reviewed explicitly.
+- The owner approved public visibility. Keep every tracked file suitable for a
+  public repository; visibility changes remain an owner-only decision.
