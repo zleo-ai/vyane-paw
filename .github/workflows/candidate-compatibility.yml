@@ -8,14 +8,13 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: vyane-rs-candidate-compatibility
-  cancel-in-progress: true
-
 jobs:
   candidate:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    concurrency:
+      group: vyane-rs-candidate-compatibility
+      cancel-in-progress: true
     outputs:
       failed_step: ${{ steps.record.outputs.failed_step }}
       lock_vyane_rs: ${{ steps.record.outputs.lock_vyane_rs }}
@@ -42,6 +41,7 @@ jobs:
 
       - name: Probe current vyane-rs main
         id: probe
+        timeout-minutes: 25
         env:
           VYANE_PAW_RUNTIME_DIR: >-
             ${{ runner.temp }}/vyane-paw-${{ github.run_id }}-${{ github.job }}-${{ github.run_attempt }}
@@ -60,7 +60,7 @@ jobs:
             failed="Checkout repository"
           elif [[ "${{ steps.setup_uv.outcome }}" == "failure" ]]; then
             failed="Set up uv"
-          elif [[ "${{ steps.probe.outcome }}" == "failure" ]]; then
+          elif [[ "${{ steps.probe.outcome }}" == "failure" || "${{ steps.probe.outcome }}" == "cancelled" ]]; then
             failed="Probe current vyane-rs main"
           fi
 
@@ -106,14 +106,19 @@ jobs:
     needs: candidate
     if: >-
       always() &&
+      !cancelled() &&
       (needs.candidate.result == 'success' || needs.candidate.result == 'failure') &&
       github.repository == 'zleo-ai/vyane-paw' &&
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    concurrency:
+      group: vyane-rs-candidate-canary-notify
+      cancel-in-progress: false
     permissions:
       contents: read
+      actions: read
       issues: write
     steps:
       - name: Checkout repository
@@ -121,12 +126,14 @@ jobs:
         with:
           persist-credentials: false
       - name: Update candidate canary issue
+        if: "always() && !cancelled()"
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_REF: ${{ github.ref }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           CANARY_RESULT: ${{ needs.candidate.result }}
+          CANARY_RUN_ID: ${{ github.run_id }}
           CANARY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CANARY_RUN_TIME: ${{ needs.candidate.outputs.started_at }}
           CANARY_FAILED_STEP: ${{ needs.candidate.outputs.failed_step }}

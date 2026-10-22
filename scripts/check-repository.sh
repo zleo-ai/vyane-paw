@@ -5,6 +5,7 @@ repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
 bash -n bin/* scripts/*.sh
+bash scripts/test-notify-candidate-canary.sh
 uv lock --check --project compat/qwenpaw-app
 
 uv run --project compat --locked \
