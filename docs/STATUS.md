@@ -49,7 +49,7 @@ which of those plans are current.
 | VP-14 | Complete and merged | Durable readiness budget and failure self-diagnosis |
 | VP-15 | Complete and merged | WP-152 pin `03dbd2fd`; result_contract + dual bound; hermetic run-vp08 with `terminal_succeeded_with_output == 1` (PR #22) |
 | VP-16 | Complete and merged | Public workflows use hosted-only CI; repository runner registration removed after PR/main evidence |
-| VP-17 | Evaluated; lock not promoted | vyane-rs `03ebd403` / rmcp `3.3.0` fails the nine-tool stable gate (`vyane_workflow_plan`); candidate image is uv `0.13.4`; schedule/dispatch failures open one `candidate-canary-failure` issue; a cancelled run does not write one, and an older success does not close a newer failure |
+| VP-17 | Evaluated; lock not promoted | vyane-rs `03ebd403` / rmcp `3.3.0` fails the nine-tool stable gate (`vyane_workflow_plan`); candidate image is uv `0.13.4`; schedule/dispatch failures open one `candidate-canary-failure` issue; a run cancelled before the issue step starts does not write one, and a success does not close a newer probe |
 
 ## Verified closeout
 
@@ -66,9 +66,14 @@ The previous uv `0.11.28` digest
 is that tag's linux/amd64 manifest, still listed by index
 `sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa`.
 Scheduled and manually dispatched candidate failures on `main` in this
-repository open or update one `candidate-canary-failure` issue. A later
-success closes it only when that run is not older than the failure recorded
-on the issue. A cancelled run does not write an issue. The probe step times
+repository open or update one `candidate-canary-failure` issue. A success
+closes it only when that success's probe start is not earlier than every
+probe start recorded on the issue. Run id order is not used, because a
+re-run keeps the same run id. A run cancelled before the issue-writing
+step starts does not write. If cancellation arrives while that step is
+running, the step's `!cancelled()` condition becomes false, so GitHub
+stops keeping the writer alive beside the next run. A request that has
+already been sent is not withdrawn. The probe step times
 out at 25 minutes, under the 30-minute job cap, so a stuck probe can still
 fail into that notice. Details and command results are in
 `work-packages/VP-17.md`.

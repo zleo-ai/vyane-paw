@@ -21,10 +21,13 @@ jobs:
       lock_rmcp: ${{ steps.record.outputs.lock_rmcp }}
       upstream_vyane_rs: ${{ steps.record.outputs.upstream_vyane_rs }}
       started_at: ${{ steps.start.outputs.at }}
+      run_attempt: ${{ steps.start.outputs.attempt }}
     steps:
       - name: Record canary start
         id: start
-        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+          echo "attempt=${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         id: checkout
@@ -116,6 +119,9 @@ jobs:
     concurrency:
       group: vyane-rs-candidate-canary-notify
       cancel-in-progress: false
+      # The default queue keeps one pending job and cancels the previous
+      # waiter. max keeps the waiting notifies (platform cap 100).
+      queue: max
     permissions:
       contents: read
       actions: read
@@ -135,6 +141,7 @@ jobs:
           CANARY_RESULT: ${{ needs.candidate.result }}
           CANARY_RUN_ID: ${{ github.run_id }}
           CANARY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CANARY_RUN_ATTEMPT: ${{ needs.candidate.outputs.run_attempt }}
           CANARY_RUN_TIME: ${{ needs.candidate.outputs.started_at }}
           CANARY_FAILED_STEP: ${{ needs.candidate.outputs.failed_step }}
           CANARY_LOCK_VYANE_RS: ${{ needs.candidate.outputs.lock_vyane_rs }}
