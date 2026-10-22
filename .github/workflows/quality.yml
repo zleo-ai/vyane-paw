@@ -23,7 +23,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "0.11.28"
+          version: "0.13.4"
           enable-cache: false
       - name: Validate repository
         run: ./scripts/check-repository.sh
@@ -40,7 +40,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "0.11.28"
+          version: "0.13.4"
           enable-cache: false
       - name: Probe current vyane-rs main
         env:
@@ -68,7 +68,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "0.11.28"
+          version: "0.13.4"
           enable-cache: false
       - name: Run headless QwenPaw application integration
         env:
@@ -85,7 +85,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "0.11.28"
+          version: "0.13.4"
           enable-cache: false
       - name: Run durable workflow integration
         env:
@@ -102,7 +102,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "0.11.28"
+          version: "0.13.4"
           enable-cache: false
       - name: Run capability-negotiation probe
         env:
