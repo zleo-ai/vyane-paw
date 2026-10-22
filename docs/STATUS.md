@@ -1,6 +1,6 @@
 # Engineering status and handoff
 
-Last verified: 2026-08-17
+Last verified: 2026-10-22
 
 This page is the canonical starting point for an agent continuing Vyane Paw
 without conversation history. Architecture decisions remain in `docs/` and
@@ -22,6 +22,10 @@ which of those plans are current.
   - durable workflow submit/status/cancel **and** succeeded bounded output
     retrieval (`output` / `output_omitted`) on pin `03dbd2fd` (VP-15).
 - Latest completed package: VP-16.
+- VP-17 (2026-10-22) evaluated vyane-rs `main`
+  `03ebd40374ff37927c2d440beda7daa23f1d2aa4` and did not promote the lock.
+  The stable pin remains `03dbd2fd1f1a3f7d6d7f8aa9396c6ce55b5d22f0` / rmcp
+  `3.0.1`. See `work-packages/VP-17.md`.
 - Verified main commit:
   `65a31e38614629a923ccaa396afe53a7f2f972fd`.
 
@@ -45,8 +49,26 @@ which of those plans are current.
 | VP-14 | Complete and merged | Durable readiness budget and failure self-diagnosis |
 | VP-15 | Complete and merged | WP-152 pin `03dbd2fd`; result_contract + dual bound; hermetic run-vp08 with `terminal_succeeded_with_output == 1` (PR #22) |
 | VP-16 | Complete and merged | Public workflows use hosted-only CI; repository runner registration removed after PR/main evidence |
+| VP-17 | Evaluated; lock not promoted | vyane-rs `03ebd403` / rmcp `3.3.0` fails the nine-tool stable gate (`vyane_workflow_plan`); candidate image is uv `0.13.4`; schedule/dispatch failures open one `candidate-canary-failure` issue |
 
 ## Verified closeout
+
+VP-17 evaluation on 2026-10-22: public vyane-rs `main` was
+`03ebd40374ff37927c2d440beda7daa23f1d2aa4` (259 commits after
+`03dbd2fd`). Its `Cargo.lock` resolves rmcp `3.3.0`, and `vyane mcp`
+advertises `vyane_workflow_plan` in addition to the pinned nine-tool set.
+`scripts/run-vp01.sh` failed on that tool set, so `upstreams.lock.json`,
+tracked evidence, and the README / MCP baseline lines stay on `03dbd2fd` /
+rmcp `3.0.1`. The candidate image pin moved to uv `0.13.4` (index digest
+`sha256:9f130421e930bfbdc563c00740466603f8723158e90297d07957c2294640262b`).
+The previous uv `0.11.28` digest
+`sha256:5c3ab83183a73c5d319a77009eb425b60d5bb937f339fb7876788ebf567baf48`
+is that tag's linux/amd64 manifest, still listed by index
+`sha256:0f36cb9361a3346885ca3677e3767016687b5a170c1a6b88465ec14aefec90aa`.
+Scheduled and manually dispatched candidate failures on `main` in this
+repository open or update one `candidate-canary-failure` issue and close it
+after a later success. Details and command results are in
+`work-packages/VP-17.md`.
 
 VP-16 closeout on 2026-08-17: all public workflow jobs use the exact
 `ubuntu-24.04` allowlist, and the fail-closed trust-boundary checker rejects
@@ -140,7 +162,10 @@ checks after a new change.
 
 ## Current priorities
 
-VP-16 is complete. The public repository has no registered self-hosted runner;
+VP-16 is complete. VP-17 did not promote the stable lock: the moving
+candidate remains red until a later package accepts the ten-tool surface
+(including `vyane_workflow_plan`) and passes the stable gates. The public
+repository has no registered self-hosted runner;
 future lightweight local CI, if needed, must live in a separate private
 control plane and cannot be a public-PR fallback or required check.
 

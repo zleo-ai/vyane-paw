@@ -16,16 +16,121 @@ jobs:
   candidate:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      failed_step: ${{ steps.record.outputs.failed_step }}
+      lock_vyane_rs: ${{ steps.record.outputs.lock_vyane_rs }}
+      lock_rmcp: ${{ steps.record.outputs.lock_rmcp }}
+      upstream_vyane_rs: ${{ steps.record.outputs.upstream_vyane_rs }}
+      started_at: ${{ steps.start.outputs.at }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Record canary start
+        id: start
+        run: echo "at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repository
+        id: checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+
+      - name: Set up uv
+        id: setup_uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           version: "0.13.4"
           enable-cache: false
+
       - name: Probe current vyane-rs main
+        id: probe
         env:
           VYANE_PAW_RUNTIME_DIR: >-
             ${{ runner.temp }}/vyane-paw-${{ github.run_id }}-${{ github.job }}-${{ github.run_attempt }}
         run: ./scripts/run-vp06-container.sh
+
+      - name: Record canary facts
+        id: record
+        if: always()
+        env:
+          VYANE_PAW_RUNTIME_DIR: >-
+            ${{ runner.temp }}/vyane-paw-${{ github.run_id }}-${{ github.job }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          failed=""
+          if [[ "${{ steps.checkout.outcome }}" == "failure" ]]; then
+            failed="Checkout repository"
+          elif [[ "${{ steps.setup_uv.outcome }}" == "failure" ]]; then
+            failed="Set up uv"
+          elif [[ "${{ steps.probe.outcome }}" == "failure" ]]; then
+            failed="Probe current vyane-rs main"
+          fi
+
+          lock_vyane="unresolved"
+          lock_rmcp="unresolved"
+          if [[ -f upstreams.lock.json ]]; then
+            raw_vyane="$(jq -r '.upstreams.vyane_rs.revision // empty' upstreams.lock.json || true)"
+            raw_rmcp="$(jq -r '.upstreams.rmcp.version // empty' upstreams.lock.json || true)"
+            if [[ "$raw_vyane" =~ ^[0-9a-f]{40}$ ]]; then
+              lock_vyane="$raw_vyane"
+            fi
+            if [[ "$raw_rmcp" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              lock_rmcp="$raw_rmcp"
+            fi
+          fi
+
+          upstream="unresolved"
+          evidence="${VYANE_PAW_RUNTIME_DIR}/evidence/vp01-candidate.json"
+          if [[ -f "$evidence" ]]; then
+            raw_upstream="$(jq -r '.upstream_revisions.vyane_rs // empty' "$evidence" || true)"
+            if [[ "$raw_upstream" =~ ^[0-9a-f]{40}$ ]]; then
+              upstream="$raw_upstream"
+            fi
+          fi
+          if [[ "$upstream" == "unresolved" ]]; then
+            raw_upstream="$(
+              git ls-remote https://github.com/zleo-ai/vyane-rs.git refs/heads/main |
+                awk 'NR == 1 { print $1 }' || true
+            )"
+            if [[ "$raw_upstream" =~ ^[0-9a-f]{40}$ ]]; then
+              upstream="$raw_upstream"
+            fi
+          fi
+
+          {
+            echo "failed_step=${failed}"
+            echo "lock_vyane_rs=${lock_vyane}"
+            echo "lock_rmcp=${lock_rmcp}"
+            echo "upstream_vyane_rs=${upstream}"
+          } >>"$GITHUB_OUTPUT"
+
+  notify:
+    needs: candidate
+    if: >-
+      always() &&
+      (needs.candidate.result == 'success' || needs.candidate.result == 'failure') &&
+      github.repository == 'zleo-ai/vyane-paw' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Update candidate canary issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          CANARY_RESULT: ${{ needs.candidate.result }}
+          CANARY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CANARY_RUN_TIME: ${{ needs.candidate.outputs.started_at }}
+          CANARY_FAILED_STEP: ${{ needs.candidate.outputs.failed_step }}
+          CANARY_LOCK_VYANE_RS: ${{ needs.candidate.outputs.lock_vyane_rs }}
+          CANARY_LOCK_RMCP: ${{ needs.candidate.outputs.lock_rmcp }}
+          CANARY_UPSTREAM_VYANE_RS: ${{ needs.candidate.outputs.upstream_vyane_rs }}
+        run: ./scripts/notify-candidate-canary.sh

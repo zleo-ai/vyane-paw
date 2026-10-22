@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
 runtime_root="${VYANE_PAW_RUNTIME_DIR:-$repo_root/runtime/vp06-container}"
-image="vyane-paw-candidate:rust-1.97-uv-0.11.28"
+image="vyane-paw-candidate:rust-1.97-uv-0.13.4"
 proxy_env_args=()
 
 for name in HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy; do
